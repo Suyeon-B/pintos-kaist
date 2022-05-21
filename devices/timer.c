@@ -20,9 +20,16 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+static struct semaphore *sema;
+static int MIN_alarm_time;
+static bool value_less (const struct list_elem *, const struct list_elem *,
+                        void *);
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
+
+static struct list sleep_list;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
@@ -92,10 +99,16 @@ void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	thread_current()->time_to_wakeup = timer_ticks() + ticks;
+	thread_sleep(thread_current(), sleep_list);
 }
+
+/* 깨어날 시간이 되면 ready큐에 올린다. */
+void
+wakeup(struct thread *t){
+	thread_unblock(t);
+}
+
 
 /* Suspends execution for approximately MS milliseconds. */
 void
@@ -121,12 +134,37 @@ timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
+	/* 깨어날 시간 ≤ 현재 시간 이면,
+	   blocked list에서 ready 로 보내서 실행! */
+	// sleep list를 어떻게 순회해서 깨울 것이냐의 문제
+	// sleep list의 head부터 tail까지 돌면서 
+	// sleep list를 다 돌아
+	// 최솟값을 전역변수로
+	// 최솟값과 현재 시간 사이에
+	struct thread *t;
+	struct list_elem *now = list_head(sleep_list);
+	MIN_alarm_time = list_min(sleep_list,value_less,NULL);
+	if (MIN_alarm_time <= ticks){
+		while (now){
+			// list_entry return값 = thread 구조체
+			t = list_entry(now, sleep_list, elem);
+			if (t -> time_to_wakeup <= ticks){
+				list_remove(t->elem);
+				wakeup(t);
+			};
+			now = now->next;
+		}
+	}
+	
 	ticks++;
 	thread_tick ();
 }
+
+
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

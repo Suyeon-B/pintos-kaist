@@ -224,6 +224,17 @@ thread_block (void) {
 	schedule ();
 }
 
+void
+thread_sleep (struct thread *t, struct list *sleep_list) {
+	enum intr_level old_level;
+
+	old_level = intr_disable ();
+	list_push_back (&sleep_list, &t->elem);
+	t->status = THREAD_BLOCKED;
+	intr_set_level (old_level);
+
+}
+
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -244,6 +255,7 @@ thread_unblock (struct thread *t) {
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
+
 
 /* Returns the name of the running thread. */
 const char *
