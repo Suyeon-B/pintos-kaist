@@ -7,7 +7,7 @@
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
-#include "threads/palloc.h"
+#include "threads/palloc.h" 
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
@@ -27,6 +27,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list sleep_list; //추가
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -45,6 +46,8 @@ static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
 
+extern int64_t next_to_wake_tick;
+
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
@@ -62,6 +65,9 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+void thread_awake(int64_t ticks);
+void update_next_tick_to_awake(int64_t ticks);
+int64_t get_next_tick_to_awake(void);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -108,6 +114,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -122,19 +129,21 @@ thread_init (void) {
 void
 thread_start (void) {
 	/* Create the idle thread. */
-	struct semaphore idle_started;
+	struct semaphore idle_started; //세마포어 구조체
 	sema_init (&idle_started, 0);
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
 	/* Start preemptive thread scheduling. */
-	intr_enable ();
+	intr_enable (); //인터럽트 켜기
 
 	/* Wait for the idle thread to initialize idle_thread. */
-	sema_down (&idle_started);
+	sema_down (&idle_started); //P 양수가 될때까지 기다렸다가 감소시킨다. 
 }
 
 /* Called by the timer interrupt handler at each timer tick.
-   Thus, this function runs in an external interrupt context. */
+   Thus, this function runs in an external interrupt context.
+   각 타이머 틱에서 타이머 인터럽트에 의해 호출됩니다.스레드 동계를 추적하고 타임 슬라이스가
+   만료되면 스케줄러를 트리거합니다.  */
 void
 thread_tick (void) {
 	struct thread *t = thread_current ();
@@ -154,7 +163,7 @@ thread_tick (void) {
 		intr_yield_on_return ();
 }
 
-/* Prints thread statistics. */
+/* Prints thread statistics. 스레드 통계를 인쇄 */
 void
 thread_print_stats (void) {
 	printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
@@ -215,7 +224,10 @@ thread_create (const char *name, int priority,
 
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
-   primitives in synch.h. */
+   primitives in synch.h. 
+   실행 중인 스레드를 실행 중인 상태에서 차단된 상태로 전환합니다. 
+   스레드가 호출될때까지 스레드는 다시 실행되지않으므로 thread_unlock() 할 수 있는 방법을 마련해야한다.
+   */
 void
 thread_block (void) {
 	ASSERT (!intr_context ());
@@ -238,11 +250,11 @@ thread_unblock (struct thread *t) {
 
 	ASSERT (is_thread (t));
 
-	old_level = intr_disable ();
+	old_level = intr_disable (); //인터럽트 끄기
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
-	intr_set_level (old_level);
+	intr_set_level (old_level); //
 }
 
 /* Returns the name of the running thread. */
@@ -269,14 +281,16 @@ thread_current (void) {
 	return t;
 }
 
-/* Returns the running thread's tid. */
+/* Returns the running thread's tid. 
+	실행중인 스레드 id를 반환합니다. */
 tid_t
 thread_tid (void) {
 	return thread_current ()->tid;
 }
 
 /* Deschedules the current thread and destroys it.  Never
-   returns to the caller. */
+   returns to the caller. 
+   현재 스레드가 종료되도록 하며 절대 돌아오지않는다. */
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
@@ -293,7 +307,8 @@ thread_exit (void) {
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and
-   may be scheduled again immediately at the scheduler's whim. */
+   may be scheduled again immediately at the scheduler's whim.
+   실행할 새 스레드를 선택하는 스케줄러에 cpu를 양보한다.  */
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
@@ -301,11 +316,11 @@ thread_yield (void) {
 
 	ASSERT (!intr_context ());
 
-	old_level = intr_disable ();
-	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+	old_level = intr_disable (); //인터럽트 비활성화
+	if (curr != idle_thread) //CPU가 놀지않는다면
+		list_push_back (&ready_list, &curr->elem); //리스트 마지막에 삽입
 	do_schedule (THREAD_READY);
-	intr_set_level (old_level);
+	intr_set_level (old_level); // 다시 활성화
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -361,7 +376,7 @@ idle (void *idle_started_ UNUSED) {
 	struct semaphore *idle_started = idle_started_;
 
 	idle_thread = thread_current ();
-	sema_up (idle_started);
+	sema_up (idle_started); //V:값을 증가시키고 대기 스레드가 있을 경우 하나의 대기 스레드를 깨운다.
 
 	for (;;) {
 		/* Let someone else run. */
@@ -406,6 +421,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	memset (t, 0, sizeof *t);
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
+	t->wake_tick = 0; //추가 - wake_tick 초기값 0
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
@@ -421,7 +437,7 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else
-		return list_entry (list_pop_front (&ready_list), struct thread, elem);
+		return list_entry (list_pop_front (&ready_list), struct thread, elem);//뽑을 elem, 담을 변수, 
 }
 
 /* Use iretq to launch the thread */
@@ -466,7 +482,7 @@ static void
 thread_launch (struct thread *th) {
 	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
 	uint64_t tf = (uint64_t) &th->tf;
-	ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level () == INTR_OFF); //인터럽트 상태 == 비활성화
 
 	/* The main switching logic.
 	 * We first restore the whole execution context into the intr_frame
@@ -588,3 +604,59 @@ allocate_tid (void) {
 
 	return tid;
 }
+
+/*추가 - 스레드를 sleep lsit에 넣는 함수 */
+void thread_sleep(int64_t ticks){
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());
+
+	old_level = intr_disable (); //인터럽트 비활성화
+	if (curr != idle_thread){
+		// curr->status = THREAD_BLOCKED;
+		curr->wake_tick = ticks;
+		list_push_back (&sleep_list, &curr->elem); //리스트 마지막에 삽입
+		if (next_to_wake_tick > ticks)
+			next_to_wake_tick = ticks;
+	}
+	do_schedule (THREAD_BLOCKED);
+	intr_set_level (old_level); // 다시 활성화
+}
+
+
+/*대기중인 스레드를 깨운다. - 추가*/
+void thread_awake(int64_t ticks){
+	if (list_empty (&sleep_list)){
+		next_to_wake_tick = INT64_MAX;
+	}
+	int64_t min_tick = INT64_MAX;
+	struct thread *wake; 
+	struct list_elem *temp = &sleep_list;
+	while(temp == list_tail){ // 리스트 순회
+		wake = list_entry (temp, struct thread, elem); //해당 리스트 형변환
+		if(next_to_wake_tick < wake->wake_tick){
+			list_remove(wake);
+			thread_unblock(wake);
+		}	
+		else if(min_tick < wake->wake_tick)
+			min_tick  = wake->wake_tick;
+		temp = temp->next;
+	}
+	next_to_wake_tick = min_tick;
+}
+
+/* next_tick_to_awake 가 깨워야 할 스레드중 가장 작은 tick을 갖도록
+업데이트 한다 - 추가 */
+// void update_next_tick_to_awake(int64_t ticks)
+// {
+// 	if (next_to_wake_tick > ticks)
+// 			next_to_wake_tick = ticks;
+		
+// }
+
+// /* next_tick_to_awake 을 반환한다. - 추가 */
+// int64_t get_next_tick_to_awake(void)
+// {
+
+// }
