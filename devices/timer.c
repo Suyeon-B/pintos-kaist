@@ -20,6 +20,8 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+int64_t next_to_wake_tick = INT64_MAX; //추가 - 자료형 이게 맞나?? sleep함수 인자로 맞춰줌
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -41,8 +43,9 @@ timer_init (void) {
 	outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
 	outb (0x40, count & 0xff);
 	outb (0x40, count >> 8);
-
+	// printf("--------%d\n",ticks);
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+	// printf("--------%d\n",ticks);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -73,7 +76,7 @@ timer_calibrate (void) {
 /* Returns the number of timer ticks since the OS booted. */
 int64_t
 timer_ticks (void) {
-	enum intr_level old_level = intr_disable ();
+	enum intr_level old_level = intr_disable (); //인터럽트막기
 	int64_t t = ticks;
 	intr_set_level (old_level);
 	barrier ();
@@ -83,18 +86,21 @@ timer_ticks (void) {
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
 int64_t
-timer_elapsed (int64_t then) {
+timer_elapsed (int64_t then) { //타이머 경과
 	return timer_ticks () - then;
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
-
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	int64_t start = timer_ticks (); //현재 tick 리턴
+	ASSERT (intr_get_level () == INTR_ON);//현재 인터럽트 상태 == 활성화
+	//cpu를 양보하고 sleep_list에 넘어간다.
+	thread_sleep(start + ticks); //추가 - 양보는 어디서????
+	/* 기존 busy waiting 코드
+	while (timer_elapsed (start) < ticks) //시작이후 얼마나 많은 tick이 지나갔나 < 
+		thread_yield (); //cpu에게 양보하고 ready_list에 넣음
+	*/
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -126,6 +132,12 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+
+	//깨어날 thread가 있는지 확인해주기 - 추가
+	// int64_t now = timer_ticks();
+	if(next_to_wake_tick <= ticks){
+		thread_awake(ticks);
+	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
