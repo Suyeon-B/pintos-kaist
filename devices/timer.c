@@ -134,9 +134,9 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	thread_tick ();
 
 	//깨어날 thread가 있는지 확인해주기 - 추가
-	int64_t now = timer_ticks();
-	if(next_to_wake_tick < now){
-		thread_awake(next_to_wake_tick);
+	// int64_t now = timer_ticks();
+	if(next_to_wake_tick <= ticks){
+		thread_awake(ticks);
 	}
 }
 

@@ -626,24 +626,32 @@ void thread_sleep(int64_t ticks){
 
 
 /*대기중인 스레드를 깨운다. - 추가*/
-void thread_awake(int64_t ticks){
-	if (list_empty (&sleep_list)){
-		next_to_wake_tick = INT64_MAX;
-	}
+void thread_awake(int64_t ticks){ //now
+	// enum intr_level old_level;
+
+	// ASSERT (!intr_context ());
+
+	// old_level = intr_disable (); //인터럽트 비활성화 ~~~!!! 오류
+
 	int64_t min_tick = INT64_MAX;
 	struct thread *wake; 
-	struct list_elem *temp = &sleep_list;
-	while(temp == list_tail){ // 리스트 순회
+	struct list_elem *temp = list_begin(&sleep_list);
+
+	while(temp != list_tail(&sleep_list)){ // 리스트 순회
 		wake = list_entry (temp, struct thread, elem); //해당 리스트 형변환
-		if(next_to_wake_tick < wake->wake_tick){
-			list_remove(wake);
-			thread_unblock(wake);
+		if(ticks >= wake->wake_tick){ //지금 시간이랑 비교
+			temp = list_remove(&wake->elem); //remove return값 은 
+			thread_unblock(wake);//>?????
 		}	
-		else if(min_tick < wake->wake_tick)
-			min_tick  = wake->wake_tick;
-		temp = temp->next;
+		else{
+			if(min_tick > wake->wake_tick)
+				min_tick  = wake->wake_tick;
+			temp = list_next(temp);
+		}
 	}
 	next_to_wake_tick = min_tick;
+
+	// intr_set_level (old_level); // 다시 활성화
 }
 
 /* next_tick_to_awake 가 깨워야 할 스레드중 가장 작은 tick을 갖도록
