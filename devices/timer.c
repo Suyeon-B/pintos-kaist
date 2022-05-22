@@ -20,11 +20,10 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
-static struct semaphore *sema;
-/* 최솟값 갱신용 */
+/* [ sleep list에 있는 알람시간 중 가장 이른 알람시간 ] 
+   가장 이른 알람시간 ≤ 현재 ticks 이면, 깨울 스레드가 없다는 의미이다. */
 int64_t MIN_alarm_time = INT64_MAX;
-static bool value_less (const struct list_elem *, const struct list_elem *,
-                        void *);
+
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
@@ -93,13 +92,13 @@ timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-/* Suspends execution for approximately TICKS timer ticks. */
+/* 알람시간 = 현재 흐른 ticks + 재울 ticks */
 void
 timer_sleep (int64_t ticks) {
 	thread_sleep(timer_ticks () + ticks);
 }
 
-/* 깨어날 시간이 되면 ready큐에 올린다. */
+/* 알람 시간이 다 되면 sleep -> ready로 상태를 바꿔준다. */
 void
 wakeup(struct thread *t){
 	thread_unblock(t);
@@ -131,16 +130,10 @@ timer_print_stats (void) {
 }
 
 
-/* Timer interrupt handler. */
+/* [ Timer interrupt handler ]
+   알람시간 ≤ 현재 시간 이면, 깨워야 한다. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
-	/* 깨어날 시간 ≤ 현재 시간 이면,
-	   blocked list에서 ready 로 보내서 실행! */
-	// sleep list를 어떻게 순회해서 깨울 것이냐의 문제
-	// sleep list의 head부터 tail까지 돌면서 
-	// sleep list를 다 돌아
-	// 최솟값을 전역변수로
-	// 최솟값과 현재 시간 사이에
 	ticks++;
 	thread_tick ();
 	

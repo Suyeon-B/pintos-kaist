@@ -24,13 +24,16 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
-/* 최솟값 갱신용 */
+/* [ sleep list에 있는 알람시간 중 가장 이른 알람시간 ]
+   가장 이른 알람시간 ≤ 현재 ticks 이면, 깨울 스레드가 없다는 의미이다. */
 extern int64_t MIN_alarm_time;
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-/* 주석 추가 */
+
+/* List of processes in THREAD_BLOCKED state, that is, processes
+   that are Waiting for an event to trigger. */
 static struct list sleep_list;
 
 /* Idle thread. */
@@ -108,7 +111,7 @@ void thread_init(void)
 		.address = (uint64_t)gdt};
 	lgdt(&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init(&tid_lock);
 	list_init(&ready_list);
 	list_init(&sleep_list);
@@ -228,6 +231,7 @@ void thread_block(void)
 	schedule();
 }
 
+/* ticks */
 void thread_sleep(int64_t ticks)
 {
 	enum intr_level old_level;
@@ -271,6 +275,44 @@ void thread_unblock(struct thread *t)
 	t->status = THREAD_READY;
 	intr_set_level(old_level);
 }
+
+
+/* 알람 시간이 다 된 스레드가 있을 때,
+   sleep -> ready list 로 옮겨준다. */
+void thread_awake(int64_t ticks)
+{
+	struct thread *t;
+	struct list_elem *now = list_begin(&sleep_list);
+	int64_t new_MIN = INT64_MAX;
+
+	/* sleep list를 전부 순회하며 
+	   알람시간이 다 된 스레드를 unblock 해준다. */
+	while (now != list_tail(&sleep_list))
+	{
+		/* list_entry return값 = thread 구조체 */
+		t = list_entry(now, struct thread, elem);
+
+		/* 현재 스레드가 알람 시간이 다 되었다면 깨운다. */
+		if (t->time_to_wakeup <= ticks)
+		{
+			now = list_remove(&t->elem);
+			thread_unblock(t);
+		}
+		/* 현재 스레드가 아직 더 자야한다면 다음 스레드로 now를 갱신한다. */
+		else
+		{
+			now = list_next(now);
+			/* 필요하다면 전체 sleep list의 MIN 값을 갱신한다. */
+			if (new_MIN > t->time_to_wakeup)
+			{
+				new_MIN = t->time_to_wakeup;
+			}
+		}
+	}
+	MIN_alarm_time = new_MIN;
+}
+
+
 
 /* Returns the name of the running thread. */
 const char *
@@ -634,32 +676,4 @@ allocate_tid(void)
 	lock_release(&tid_lock);
 
 	return tid;
-}
-
-void thread_awake(int64_t ticks)
-{
-	struct thread *t;
-	struct list_elem *now = list_begin(&sleep_list);
-	int64_t new_MIN = INT64_MAX;
-
-	while (now != list_tail(&sleep_list))
-	{
-		// list_entry return값 = thread 구조체
-		t = list_entry(now, struct thread, elem);
-		if (t->time_to_wakeup <= ticks)
-		{
-			now = list_remove(&t->elem); /* 수상함 */
-			thread_unblock(t);
-		}
-		else
-		{
-			// now = now->next;
-			now = list_next(now);
-			if (new_MIN > t->time_to_wakeup)
-			{
-				new_MIN = t->time_to_wakeup;
-			}
-		}
-	}
-	MIN_alarm_time = new_MIN;
 }
