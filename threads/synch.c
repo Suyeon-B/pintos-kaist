@@ -66,7 +66,9 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		// list_push_back (&sema->waiters, &thread_current ()->elem);
+		/* waiters 리스트 삽입 시, 우선순위대로 삽입되도록 수정 */
+		list_insert_ordered(&sema->waiters, &thread_current()->elem, cmp_priority, NULL);
 		thread_block ();
 	}
 	sema->value--;
@@ -109,10 +111,20 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
+
+	
+
+	if (!list_empty (&sema->waiters)){
+		/* 스레드가 waiters list에 있는 동안 
+		   우선순위가 변경 되었을 경우를 고려하여 
+		   waiters list를 우선순위로 정렬 한다. */
+		list_sort(&sema->waiters, cmp_sem_priority, NULL); // function 구현 후 다시 체크
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
+	}
 	sema->value++;
+	/* priority preemption 코드 추가*/
+	
 	intr_set_level (old_level);
 }
 
@@ -282,7 +294,12 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
+	/* condition variable의 waiters list에 
+	   우선순위 순서로 삽입되도록 수정 */
 	list_push_back (&cond->waiters, &waiter.elem);
+	/* sem pri OR pri ? */
+	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
+
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -320,4 +337,17 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
+}
+
+bool 
+cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux){
+
+	struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
+	
+	/* 해당 condition variable 을 기다리는 세마포어 리스트를
+	가장 높은 우선순위를 가지는 스레드의 우선순위 순으로 정렬하도록 구현 */
+
+	/* semaphore_elem을 왜 쓰는거임 ? 글고 cmp_sem_priority를 왜 쓰는거임? */
+
 }

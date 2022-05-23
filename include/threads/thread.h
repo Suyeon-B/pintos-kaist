@@ -144,4 +144,10 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+/* 현재 수행중인 스레드와 가장 높은 우선순위의 스레드의 우선순위를 비교하여 스케줄링 */
+void test_max_priority(void);
+
+/* 인자로 주어진 스레드들의 우선순위를 비교 */
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
 #endif /* threads/thread.h */
