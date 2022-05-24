@@ -326,11 +326,13 @@ void test_max_priority(void)
 	/* ready_list에서 우선순위가 가장 높은 스레드와
 	   현재 스레드의 우선순위를 비교하여 스케줄링 한다.
 	   (ready_list가 비어있지 않은지 확인) */
-	struct thread *top_pri = list_begin(&ready_list);
-	/* 조건문이  */
-	if (cmp_priority(top_pri, &thread_current()->elem, NULL))
-	{
-		thread_yield();
+	if (!list_empty(&ready_list)){
+		struct thread *top_pri = list_begin(&ready_list);
+		/* 조건문이  */
+		if (cmp_priority(top_pri, &thread_current()->elem, NULL))
+		{
+			thread_yield();
+		}
 	}
 }
 
