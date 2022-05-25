@@ -260,9 +260,7 @@ void lock_release(struct lock *lock)
 		remove_with_lock(lock);
 		refresh_priority();
 	}
-
 	sema_up(&lock->semaphore);
-	// test_max_priority();
 }
 
 /* Returns true if the current thread holds LOCK, false

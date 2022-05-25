@@ -133,8 +133,6 @@ void thread_init(void)
 	list_push_back(&all_list, &(initial_thread->allelem));
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid();
-	initial_thread->nice = NICE_DEFAULT;
-    initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -169,17 +167,6 @@ void thread_tick(void)
 #endif
 	else
 		kernel_ticks++;
-
-	if (thread_mlfqs) {
-        mlfqs_increment();
-        if (timer_ticks() % 4 == 0)
-            mlfqs_recalc_priority();
-
-        if (timer_ticks() % 100 == 0) {
-            mlfqs_load_avg();
-            mlfqs_recalc_recent_cpu();
-        }
-    }
 
 	/* Enforce preemption. */
 	if (++thread_ticks >= TIME_SLICE)
@@ -440,8 +427,8 @@ void thread_set_priority(int new_priority)
 {
 	/* mlfqs 스케줄러를 활성 하면 thread_mlfqs 변수는 ture로 설정됨
 	   mlfqs 스케줄러 일때 우선순위를 임의로 변경할수 없도록 한다. */
-	if (thread_mlfqs)
-		return;
+	if (thread_mlfqs) return;
+
 	thread_current()->priority = new_priority;
 	thread_current()->init_priority = new_priority;
 
@@ -462,9 +449,8 @@ void thread_set_nice(int nice UNUSED)
 	   nice 값 변경 후에 현재 스레드의 우선순위를
 	   재계산하고 우선순위에 의해 스케줄링 한다.
 	   해당 작업중에 인터럽트는 비활성화 해야 한다. */
-	ASSERT(nice >= -20 && nice <= 20);
-	enum intr_level old_level;
 	struct thread *t = thread_current();
+	enum intr_level old_level;
 
 	old_level = intr_disable();
 	t->nice = nice;
@@ -478,8 +464,8 @@ int thread_get_nice(void)
 {
 	/* 현재 스레드의 nice 값을 반환한다.
 	   해당 작업중에 인터럽트는 비활성되어야 한다. */
-	enum intr_level old_level;
 	struct thread *t = thread_current();
+	enum intr_level old_level;
 
 	old_level = intr_disable();
 	int nice_val = t->nice;
@@ -497,8 +483,6 @@ int thread_get_load_avg(void)
 	enum intr_level old_level;
 
 	old_level = intr_disable();
-	// int new_load_avg = fp_to_int_round(mult_mixed(100, load_avg));
-	// int new_load_avg = fp_to_int_round(100 * load_avg);
 	int new_load_avg = fp_to_int(mult_mixed(load_avg, 100));
 	intr_set_level(old_level);
 
@@ -514,7 +498,6 @@ int thread_get_recent_cpu(void)
 
 	old_level = intr_disable();
 	int new_recent_cpu = fp_to_int(mult_mixed(thread_current()->recent_cpu, 100));
-	// int new_recent_cpu = fp_to_int_round(100 * thread_current()->recent_cpu);
 	intr_set_level(old_level);
 
 	return new_recent_cpu;
@@ -924,6 +907,7 @@ void mlfqs_recalc_recent_cpu(void) {
         mlfqs_recent_cpu(list_entry(tmp, struct thread, allelem));
     }
 }
+
 void mlfqs_recalc_priority(void) {
     for (struct list_elem *tmp = list_begin(&all_list); tmp != list_end(&all_list); tmp = list_next(tmp)) {
         mlfqs_priority(list_entry(tmp, struct thread, allelem));
