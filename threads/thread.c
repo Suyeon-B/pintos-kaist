@@ -326,7 +326,8 @@ void test_max_priority(void)
 	/* ready_list에서 우선순위가 가장 높은 스레드와
 	   현재 스레드의 우선순위를 비교하여 스케줄링 한다.
 	   (ready_list가 비어있지 않은지 확인) */
-	if (!list_empty(&ready_list)){
+	if (!list_empty(&ready_list))
+	{
 		struct thread *top_pri = list_begin(&ready_list);
 		/* 조건문이  */
 		if (cmp_priority(top_pri, &thread_current()->elem, NULL))
@@ -428,6 +429,7 @@ void thread_set_priority(int new_priority)
 	/* refresh_priority() 함수를 사용하여 우선순위 변경으로 인한 donation 관련 정보를 갱신한다.
 	   donation_priority(), test_max_pariority() 함수를 적절히 사용하여
 	   priority donation 을 수행하고 스케줄링 한다. */
+	/* 여기가 수상함 */
 	if (!list_empty(&thread_current()->donations))
 	{
 		refresh_priority();
@@ -540,9 +542,9 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->magic = THREAD_MAGIC;
 
 	/* Priority donation관련 자료구조 초기화 */
-    t->init_priority = priority;
-    t->wait_on_lock = NULL;
-    list_init(&t->donations);
+	t->init_priority = priority;
+	t->wait_on_lock = NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -734,24 +736,26 @@ allocate_tid(void)
 	return tid;
 }
 
-void donate_priority(void){
+void donate_priority(void)
+{
 	/* priority donation 을 수행하는 함수를 구현한다.
-	   현재 스레드가 기다리고 있는 lock과 연결된 모든 스레드들을 순회하며 
-	   현재 스레드의 우선순위를 lock을 보유하고 있는 스레드에게 기부 한다. 
+	   현재 스레드가 기다리고 있는 lock과 연결된 모든 스레드들을 순회하며
+	   현재 스레드의 우선순위를 lock을 보유하고 있는 스레드에게 기부 한다.
 	   (Nested donation 그림 참고, nested depth 는 8로 제한한다.) */
 	struct thread *holder = thread_current()->wait_on_lock->holder;
 	int count = 0;
 	while (holder != NULL)
-	{	
+	{
 		holder->priority = thread_current()->priority;
 		count++;
 		if (count > 8 || holder->wait_on_lock == NULL)
 			break;
 		holder = holder->wait_on_lock->holder;
-	} 
+	}
 }
 
-void remove_with_lock(struct lock *lock){
+void remove_with_lock(struct lock *lock)
+{
 	/* lock 을 해지 했을때 donations 리스트에서 해당 엔트리를 삭제 하기 위한 함수를 구현한다. */
 	/* 현재 스레드의 donations 리스트를 확인하여 해지 할 lock 을 보유하고 있는 엔트리를 삭제 한다. */
 	struct list_elem *curr_donation_elem = list_begin(&thread_current()->donations);
@@ -793,10 +797,11 @@ void refresh_priority(void)
 	// printf("prev priority: %d\n", thread_current()->priority);
 
 	/* 구현중. 여기부터 다시 시작 */
-	if (!list_empty(&thread_current()->donations)){
+	if (!list_empty(&thread_current()->donations))
+	{
 		struct thread *front_thread = list_entry(list_begin(&thread_current()->donations),
-											 struct thread,
-											 donation_elem);
+												 struct thread,
+												 donation_elem);
 		// printf("front_thread priority: %d\n", front_thread->priority);
 
 		if (thread_current()->priority < front_thread->priority)
@@ -804,8 +809,7 @@ void refresh_priority(void)
 			thread_current()->priority = front_thread->priority;
 			// printf("priority: %d\n", thread_current()->priority);
 		}
-	}	
-	
+	}
 }
 
 bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
