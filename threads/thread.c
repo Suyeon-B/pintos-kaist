@@ -217,9 +217,6 @@ tid_t thread_create(const char *name, int priority,
 
 	/* 생성된 스레드의 우선순위가 현재 실행중인
 	   스레드의 우선순위보다 높다면, CPU를 양보한다. */
-	// if (PRI_DEFAULT > thread_current()->priority){
-	// 	thread_yield();
-	// }
 	test_max_priority();
 
 	return tid;
@@ -256,7 +253,6 @@ void thread_sleep(int64_t ticks)
 		}
 
 		list_push_back(&sleep_list, &t->elem);
-		// t->status = THREAD_BLOCKED;
 	}
 
 	do_schedule(THREAD_BLOCKED);
@@ -279,8 +275,7 @@ void thread_unblock(struct thread *t)
 
 	old_level = intr_disable();
 	ASSERT(t->status == THREAD_BLOCKED);
-	/* 스레드가 unblock될 때, 우선순위 순으로 정렬되어 ready_list에 삽입되도록 수정 */
-	// list_push_back(&ready_list, &t->elem);
+	/* 스레드가 unblock될 때, 우선순위 순으로 정렬되어 ready_list에 삽입 */
 	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level(old_level);
@@ -324,12 +319,10 @@ void thread_awake(int64_t ticks)
 void test_max_priority(void)
 {
 	/* ready_list에서 우선순위가 가장 높은 스레드와
-	   현재 스레드의 우선순위를 비교하여 스케줄링 한다.
-	   (ready_list가 비어있지 않은지 확인) */
+	   현재 스레드의 우선순위를 비교하여 스케줄링 */
 	if (!list_empty(&ready_list))
 	{
 		struct thread *top_pri = list_begin(&ready_list);
-		/* 조건문이  */
 		if (cmp_priority(top_pri, &thread_current()->elem, NULL))
 		{
 			thread_yield();
@@ -398,9 +391,7 @@ void thread_yield(void)
 
 	old_level = intr_disable();
 	if (curr != idle_thread)
-		/* list_insert_ordered() 함수에 사용되는 cmp_priority() 함수를 추가 */
-		/* 현재 thread가 CPU를 양보하여 ready_list에 삽입될 때,
-		   우선순위 순서로 정렬되어 삽입되도록 수정 */
+		/* 현재 thread가 CPU를 양보하여 ready_list에 삽입될 때, 우선순위 순서로 정렬하여 삽입 */
 		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
@@ -408,8 +399,6 @@ void thread_yield(void)
 
 bool cmp_priority(const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
 {
-	/* list_insert_ordered() 함수에서 사용하기 위해
-	   정렬 방법을 결정하기 위한 함수 작성 */
 	struct thread *a = list_entry(a_, struct thread, elem);
 	struct thread *b = list_entry(b_, struct thread, elem);
 	if (a->priority > b->priority)
@@ -423,25 +412,8 @@ void thread_set_priority(int new_priority)
 {
 	thread_current()->priority = new_priority;
 	thread_current()->init_priority = new_priority;
-	/* 스레드의 우선순위가 변경되었을 때, 우선순위에 따라 선점이 발생하도록 한다. */
-
-	/* donation 을 고려하여 thread_set_priority() 함수를 수정한다 */
-	/* refresh_priority() 함수를 사용하여 우선순위 변경으로 인한 donation 관련 정보를 갱신한다.
-	   donation_priority(), test_max_pariority() 함수를 적절히 사용하여
-	   priority donation 을 수행하고 스케줄링 한다. */
-	/* 여기가 수상함 */
-
-	/* 현재 스레드의 lock을 얻기 위해
-	   자기의 우선순위를 준 스레드들이 있다면 */
-	// if (!list_empty(&thread_current()->donations))
-	// {
-	// 	refresh_priority();
-	// 	donate_priority();
-	// }
-	/* 수연 수정 */
+	
 	refresh_priority();
-	/* 현재 스레드의 lock을 필요 */
-
 	test_max_priority();
 }
 
@@ -742,12 +714,12 @@ allocate_tid(void)
 	return tid;
 }
 
+/* priority donation을 수행하는 함수
+   현재 스레드가 기다리고 있는 lock과 연결된 모든 스레드들을 순회하며
+   현재 스레드의 우선순위를 lock을 보유하고 있는 스레드에게 기부 한다.
+   ** nested depth는 8로 제한 ** */
 void donate_priority(void)
 {
-	/* priority donation 을 수행하는 함수를 구현한다.
-	   현재 스레드가 기다리고 있는 lock과 연결된 모든 스레드들을 순회하며
-	   현재 스레드의 우선순위를 lock을 보유하고 있는 스레드에게 기부 한다.
-	   (Nested donation 그림 참고, nested depth 는 8로 제한한다.) */
 	struct thread *holder = thread_current()->wait_on_lock->holder;
 	int count = 0;
 	while (holder != NULL)
@@ -760,14 +732,13 @@ void donate_priority(void)
 	}
 }
 
+/* lock을 해지했을때 donations 리스트에서 
+   해당 엔트리를 삭제하기 위한 함수 */
 void remove_with_lock(struct lock *lock)
 {
-	/* lock 을 해지 했을때 donations 리스트에서 해당 엔트리를 삭제 하기 위한 함수를 구현한다. */
-	/* 현재 스레드의 donations 리스트를 확인하여 해지 할 lock 을 보유하고 있는 엔트리를 삭제 한다. */
 	struct list_elem *curr_donation_elem = list_begin(&thread_current()->donations);
-	// printf("curr_donation_elem : %d", );
 
-	/* donations 리스트에서 지금 지울 lock을 찾아서 삭제한다. */
+	/* donations 리스트에서 지울 lock을 찾아서 삭제한다. */
 	while (curr_donation_elem != list_tail(&thread_current()->donations))
 	{
 		struct thread *curr_donation_thread = list_entry(curr_donation_elem, struct thread, donation_elem);
@@ -787,41 +758,24 @@ void remove_with_lock(struct lock *lock)
    -> multiple donation 기능 */
 void refresh_priority(void)
 {
-	/* 현재 스레드의 우선순위를 기부받기 전의 우선순위로 변경 */
+	/* 현재 스레드의 우선순위를 기부받기 전의 우선순위로 초기화 */
 	thread_current()->priority = thread_current()->init_priority;
 
-	/* 가장 우선순위가 높은 donations 리스트의 스레드와
-	현재 스레드의 우선순위를 비교하여 높은 값을 현재 스레드의 우선순위로 설정한다. */
-
-	/* 기부를 받은 스레드가 lock을 반납하려 할 때,
-	   자신의 원래 우선순위로 변경해야 하는데 만약 lock을 여러개 들고 있어서
-	   다른 스레드에게도 기부를 받았다면?
-	   다시 또 lock을 들고 있는 스레드가 실행되지 않는 상황이 발생한다.
-	   이를 해결하기 위해서 lock을 반납할 때, 다른 lock을 들고 있다면
-	   원래 우선순위가 아닌 해당 lock에 기부를 한 스레드들 중에서
-	   가장 높은 우선순위로 변경되어야 한다. */
-	// printf("prev priority: %d\n", thread_current()->priority);
-
-	/* 구현중. 여기부터 다시 시작 */
 	if (!list_empty(&thread_current()->donations))
 	{
 		struct thread *front_thread = list_entry(list_begin(&thread_current()->donations),
 												 struct thread,
 												 donation_elem);
-		// printf("front_thread priority: %d\n", front_thread->priority);
 
 		if (thread_current()->priority < front_thread->priority)
 		{
 			thread_current()->priority = front_thread->priority;
-			// printf("priority: %d\n", thread_current()->priority);
 		}
 	}
 }
 
 bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-	/* list_insert_ordered() 함수에서 사용하기 위해
-	   정렬 방법을 결정하기 위한 함수 작성 */
 	struct thread *da = list_entry(a, struct thread, donation_elem);
 	struct thread *db = list_entry(b, struct thread, donation_elem);
 	if (da->priority > db->priority)
