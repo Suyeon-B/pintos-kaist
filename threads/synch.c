@@ -201,8 +201,10 @@ void lock_acquire(struct lock *lock)
 	ASSERT(!lock_held_by_current_thread(lock));
 	struct thread *curr = thread_current();
 	
+	/* mlfqs 스케줄러 활성화시 priority donation 관련 코드 비활성화 
+	   !thread_mlfqs -> RR */
 	/* 해당 lock의 holder가 존재 한다면 */
-	if (lock->holder != NULL)
+	if (lock->holder != NULL && !thread_mlfqs)
 	{
 		/* 현재 스레드의 wait_on_lock 변수에 획득 하기를 기다리는 lock의 주소를 저장 */
 		curr->wait_on_lock = lock;
@@ -250,9 +252,12 @@ void lock_release(struct lock *lock)
 	ASSERT(lock_held_by_current_thread(lock));
 
 	lock->holder = NULL;
-
-	remove_with_lock(lock);
-	refresh_priority();
+	/* mlfqs 스케줄러 활성화시 priority donation 관련 코드 비활성화
+	   !thread_mlfqs -> RR */
+	if (!thread_mlfqs){
+		remove_with_lock(lock);
+		refresh_priority();
+	}
 
 	sema_up(&lock->semaphore);
 }

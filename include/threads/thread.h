@@ -92,6 +92,9 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	int64_t time_to_wakeup;				/* Time to wake up (for sleeping thread) */ 
+	
+	/* Shared between thread.c and synch.c. */
+	struct list_elem elem;              /* List element. */
 
 	/* priority scheduling */
 	int init_priority;                  /* donation 이후 우선순위를 초기화하기 위해 초기값 저장 */
@@ -99,8 +102,10 @@ struct thread {
     struct list donations;              /* multiple donation 을 고려하기 위해 사용 */
     struct list_elem donation_elem;     /* multiple donation 을 고려하기 위해 사용 */
 
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
+	/* MLFQS */
+	int nice;							/* for aging */
+	int recent_cpu;
+	
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -153,11 +158,18 @@ void do_iret (struct intr_frame *tf);
 /* 현재 수행중인 스레드와 가장 높은 우선순위의 스레드의 우선순위를 비교하여 스케줄링 */
 void test_max_priority(void);
 
-/* 인자로 주어진 스레드들의 우선순위를 비교 */
+/* priority scheduling */
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void donate_priority(void);
 void remove_with_lock(struct lock *lock);
 void refresh_priority(void);
+
+/* MLFQS */
+void mlfqs_priority (struct thread *t); 
+void mlfqs_recent_cpu (struct thread *t); 
+void mlfqs_load_avg (void);
+void mlfqs_increment (void);
+void mlfqs_recalc (void);
 
 #endif /* threads/thread.h */
