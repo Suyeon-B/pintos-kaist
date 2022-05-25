@@ -23,6 +23,7 @@ static int64_t ticks;
 /* [ sleep list에 있는 알람시간 중 가장 이른 알람시간 ]
    가장 이른 알람시간 ≤ 현재 ticks 이면, 깨울 스레드가 없다는 의미이다. */
 int64_t MIN_alarm_time = INT64_MAX;
+#define F (1 << 14) /* fixed point 1 */
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
@@ -140,20 +141,17 @@ timer_interrupt(struct intr_frame *args UNUSED)
 	/* mlfqs 스케줄러일 경우
 	   timer_interrupt 가 발생할때 마다 recuent_cpu 1증가, 
 	   1초마다 load_avg, recent_cpu, priority 재계산,
-	   현재 스레드 : 매 4tick마다 priority 재계산 */
+	   매 4tick마다 priority 재계산 */
 	if (thread_mlfqs){
-		thread_current()->recent_cpu++;
-		if (ticks%TIMER_FREQ == 0){
-			mlfqs_load_avg();
-			mlfqs_recalc();
-		}
+		mlfqs_increment_recent_cpu();
 		if (ticks%4 == 0){
-			mlfqs_priority(thread_current());
+			mlfqs_recal_priority();
+			if (ticks%TIMER_FREQ == 0){
+				mlfqs_recal_recent_cpu();
+				mlfqs_load_avg();
+			}
 		}
 	}
-
-
-
 	if (MIN_alarm_time <= ticks)
 	{
 		thread_awake(ticks);

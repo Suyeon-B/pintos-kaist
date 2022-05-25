@@ -204,7 +204,15 @@ void lock_acquire(struct lock *lock)
 	/* mlfqs 스케줄러 활성화시 priority donation 관련 코드 비활성화 
 	   !thread_mlfqs -> RR */
 	/* 해당 lock의 holder가 존재 한다면 */
-	if (lock->holder != NULL && !thread_mlfqs)
+	/* 통과하면 수정해보기 */
+	if (thread_mlfqs)
+	{
+    	sema_down (&lock->semaphore);
+    	lock->holder = thread_current ();
+    	return;
+  	}
+
+	if (lock->holder != NULL)
 	{
 		/* 현재 스레드의 wait_on_lock 변수에 획득 하기를 기다리는 lock의 주소를 저장 */
 		curr->wait_on_lock = lock;
