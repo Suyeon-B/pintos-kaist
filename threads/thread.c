@@ -430,11 +430,17 @@ void thread_set_priority(int new_priority)
 	   donation_priority(), test_max_pariority() 함수를 적절히 사용하여
 	   priority donation 을 수행하고 스케줄링 한다. */
 	/* 여기가 수상함 */
-	if (!list_empty(&thread_current()->donations))
-	{
-		refresh_priority();
-		donate_priority();
-	}
+
+	/* 현재 스레드의 lock을 얻기 위해
+	   자기의 우선순위를 준 스레드들이 있다면 */
+	// if (!list_empty(&thread_current()->donations))
+	// {
+	// 	refresh_priority();
+	// 	donate_priority();
+	// }
+	/* 수연 수정 */
+	refresh_priority();
+	/* 현재 스레드의 lock을 필요 */
 
 	test_max_priority();
 }
