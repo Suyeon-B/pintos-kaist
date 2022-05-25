@@ -205,13 +205,6 @@ void lock_acquire(struct lock *lock)
 	   !thread_mlfqs -> RR */
 	/* 해당 lock의 holder가 존재 한다면 */
 	/* 통과하면 수정해보기 */
-	if (thread_mlfqs)
-	{
-    	sema_down (&lock->semaphore);
-    	lock->holder = thread_current ();
-    	return;
-  	}
-
 	if (lock->holder != NULL)
 	{
 		/* 현재 스레드의 wait_on_lock 변수에 획득 하기를 기다리는 lock의 주소를 저장 */
@@ -220,7 +213,8 @@ void lock_acquire(struct lock *lock)
 		   donation 을 받은 스레드의 thread 구조체를 list로 관리한다. */
 		list_insert_ordered(&lock->holder->donations, &curr->donation_elem, cmp_donation_priority, NULL);
 		/* priority donation 수행하기 위해 donate_priority() 함수 호출 */
-		donate_priority();
+		if (!thread_mlfqs)
+			donate_priority();
 	}
 	sema_down(&lock->semaphore);
 	curr->wait_on_lock = NULL;
@@ -268,6 +262,7 @@ void lock_release(struct lock *lock)
 	}
 
 	sema_up(&lock->semaphore);
+	// test_max_priority();
 }
 
 /* Returns true if the current thread holds LOCK, false
