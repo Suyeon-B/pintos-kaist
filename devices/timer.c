@@ -142,16 +142,17 @@ timer_interrupt(struct intr_frame *args UNUSED)
 	   timer_interrupt 가 발생할때 마다 recuent_cpu 1증가, 
 	   1초마다 load_avg, recent_cpu, priority 재계산,
 	   매 4tick마다 priority 재계산 */
-	if (thread_mlfqs){
-		mlfqs_increment_recent_cpu();
-		if (ticks%4 == 0){
-			mlfqs_recal_priority();
-			if (ticks%TIMER_FREQ == 0){
-				mlfqs_recal_recent_cpu();
-				mlfqs_load_avg();
-			}
-		}
-	}
+	if (thread_mlfqs) {
+        mlfqs_increment();
+        if (timer_ticks() % 4 == 0)
+            mlfqs_recalc_priority();
+
+        if (timer_ticks() % 100 == 0) {
+            mlfqs_load_avg();
+            mlfqs_recalc_recent_cpu();
+        }
+    }
+	
 	if (MIN_alarm_time <= ticks)
 	{
 		thread_awake(ticks);

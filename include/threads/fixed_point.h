@@ -36,13 +36,9 @@ int fp_to_int(int x)
 int fp_to_int_round(int x)
 {
     if (x >= 0)
-    {
         return (x + F / 2) / F;
-    }
     else
-    {
         return (x - F / 2) / F;
-    }
 }
 /*FP의덧셈*/
 int add_fp(int x, int y)
@@ -67,7 +63,7 @@ int sub_mixed(int x, int n)
 /* FP의곱셈 */
 int mult_fp(int x, int y)
 {
-    return ((int64_t)x) * y / F;
+    return (int)((((int64_t)x) * y) / F);
 }
 /* FP와 int의 곱셈 */
 int mult_mixed(int x, int n)
@@ -77,7 +73,7 @@ int mult_mixed(int x, int n)
 /* FP의 나눗셈(x/y) */
 int div_fp(int x, int y)
 {
-    return ((int64_t)x) * F / y;
+    return (int)((((int64_t)x) * F) / y);
 }
 /* FP와 int 나눗셈(x/n) */
 int div_mixed(int x, int n)
