@@ -180,7 +180,10 @@ error:
 int process_exec(void *f_name)
 { //프로세스 실행 - 실행하려는 바이너리 파일 이름을 가져옴
     char *file_name = f_name;
+    char *file_name_copy[48];
     bool success;
+
+    memcpy(file_name_copy, file_name, strlen(file_name) + 1);
 
     /* We cannot use the intr_frame in the thread structure.
      * This is because when current thread rescheduled,
@@ -193,6 +196,21 @@ int process_exec(void *f_name)
     /* We first kill the current context */
     process_cleanup();
 
+    int token_count = 0;
+    char *token, *last;
+    char *arg_list[64];
+    char *tmp_save = token;
+
+    token = strtok_r(file_name_copy, " ", &last);
+    arg_list[token_count] = token;
+
+    while (token != NULL)
+    {
+        token = strtok_r(NULL, " ", &last);
+        token_count++;
+        arg_list[token_count] = token;
+    }
+
     /* And then load the binary */
     success = load(file_name, &_if); //해당 바이너리 파일을 메모리에 로드하기
 
@@ -201,19 +219,10 @@ int process_exec(void *f_name)
     if (!success)
         return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
 
-    //유저 프로그램이 실행되기 전에 스택에 인자 저장
-    int count = 0;
-    char *token, *save_ptr;
-    for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
-        count++;
-    printf("count : %d", count);
-    argument_stack(file_name, count, &_if.rsp);
+    argument_stack(token_count, arg_list, &_if);
 
-    _if.R.rdi = 4;
-    _if.R.rsi = _if.rsp + 8;
-
-    void **register_stack_pointer_pointer = &_if.rsp;
-    hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*register_stack_pointer_pointer, true); 
+    void **rspp = &_if.rsp;
+    hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
     /* Start switched process. */
     do_iret(&_if); // 유저 프로그램 실행
@@ -236,6 +245,10 @@ int process_wait(tid_t child_tid UNUSED)
     /* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
      * XXX:       to add infinite loop here before
      * XXX:       implementing the process_wait. */
+    // for simple tests
+    for (int i = 0; i < 100000000; i++)
+    {
+    }
     return -1;
 }
 
@@ -692,7 +705,7 @@ setup_stack(struct intr_frame *if_)
 }
 #endif /* VM */
 
-void argument_stack(char **parse, int count, void **rsp)
+void argument_stack(int argc, char **argv, struct intr_frame *if_)
 {
     /*
     parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간
@@ -706,32 +719,37 @@ void argument_stack(char **parse, int count, void **rsp)
     /* fake address(0) 저장 */
 
     /* filename userstack에 쌓음 */
-    int BYTES = 0;
-    for (int k = count - 1; k > -1; k--)
+    char *arg_address[128];
+
+    for (int k = argc - 1; k > -1; k--)
     {
-        for (int j = strlen(parse[k]); j > -1; j--)
-        {
-            rsp = rsp - sizeof(char);
-            **(char **)rsp = parse[k][j];
-            BYTES++;
-        }
+        int argv_len = strlen(argv[k]);
+        if_->rsp = if_->rsp - (argv_len + 1);
+        memcpy(if_->rsp, argv[k], argv_len + 1);
+        arg_address[k] = if_->rsp;
     }
-    /* 8bytes 정렬 -> padding 넣기 */
-    for (int i = BYTES % 8; i < 0; i--)
+
+    /* Insert padding for word-align */
+    while (if_->rsp % 8 != 0)
     {
-        rsp = rsp - sizeof(int8_t);
-        memset(rsp, 0, sizeof(int8_t));
+        if_->rsp--;
+        *(uint8_t *)(if_->rsp) = 0;
     }
 
     /* end of argument : 0 넣어주기 */
-    rsp = rsp - sizeof(int8_t);
-    memset(rsp, 0, sizeof(int8_t));
+    // if_->rsp = if_->rsp - sizeof(int8_t);
+    // memset(if_->rsp, 0, sizeof(int8_t));
 
     /* argv 요소 addr 넣어주기 */
-    for (int k = count - 1; k > -1; k--)
+    for (int i = argc; i >= 0; i--)
     {
-        rsp = rsp - sizeof(char *);
-        **(char **)rsp = parse[k]; /* 수상함 */
+        if_->rsp = if_->rsp - 8;
+
+        if (i == argv)
+            memset(if_->rsp, 0, sizeof(char **));
+
+        else
+            memcpy(if_->rsp, &arg_address[i], sizeof(char **));
     }
 
     // /* argv 넣어주기 */
@@ -743,9 +761,9 @@ void argument_stack(char **parse, int count, void **rsp)
     // **(char **)if_->rsp = count;
 
     /* fake addr 넣어주기 */
-    rsp = rsp - sizeof(int8_t);
-    memset(rsp, 0, sizeof(int8_t));
+    if_->rsp = if_->rsp - sizeof(int8_t);
+    memset(if_->rsp, 0, sizeof(int8_t));
 
-    // if_->R.rdi = 4;
-    // if_->R.rsi = if_->rsp + 8;
+    if_->R.rdi = argc;
+    if_->R.rsi = if_->rsp + 8;
 }
