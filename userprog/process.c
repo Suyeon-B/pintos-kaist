@@ -264,7 +264,9 @@ process_exit (void) {
 		file_close(curr->fdt[i]);
 	}
 
-	printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
+// #ifdef USERPROG
+// 	printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
+// #endif
 	process_cleanup ();
 }
 

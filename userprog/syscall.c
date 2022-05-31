@@ -139,7 +139,7 @@ void exit(int status)
 	struct thread *cur = thread_current();
 	/* Save exit status at process descriptor */
 	cur->exit_status = status;
-	// printf("%s: exit(%d)\n", cur->name, status); /* 수연 수정 - 이거 thread_exit에서 또 찍힘 */
+	printf("%s: exit(%d)\n", cur->name, status);
 	thread_exit();
 }
 
@@ -150,7 +150,8 @@ bool create(const char *file, unsigned initial_size)
 	{ //수상함
 		return filesys_create(file, initial_size);
 	}
-	return false;
+	// return false;
+	return false; // 수연 수정
 }
 
 bool remove(const char *file)
@@ -221,12 +222,10 @@ int write(int fd, const void *buffer, unsigned length)
 		putbuf(buffer, length);
 		// read_count = length;
 	}
-
 	else if (fd == STDIN_FILENO)
 	{
 		return -1;
 	}
-
 	else
 	{
 
