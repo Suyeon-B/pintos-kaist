@@ -51,17 +51,17 @@ process_create_initd (const char *file_name) { //실행파일의 이름을 가�
 	strlcpy (fn_copy, file_name, PGSIZE);
 	// printf("!!!!!!!! %s !!!!!\n",fn_copy);
 	// // /* 추가 - 첫번째 공백 전까지의 문자열 파싱 */
-	// char *token, *save_ptr; //토큰, 분리되고 남은 문자열
-	// token = strtok_r(fn_copy," ",&save_ptr); // 첫번째 인자
+	char *token, *save_ptr; //토큰, 분리되고 남은 문자열
+	token = strtok_r(file_name," ",&save_ptr); // 첫번째 인자
 
 	// printf("!!!!!!!! %s !!!!!\n",token);
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT+1, initd, fn_copy); //특정 기능을 가진 스레드 생성
+	tid = thread_create (token, PRI_DEFAULT+1, initd, fn_copy); //특정 기능을 가진 스레드 생성
 	
 	// 실행하려는 파일의 이름을 스레드의 이름으로 전달한다음 실행(initd)기능을 사용하여 스레드를 생성한다. 
 	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy); 
+		palloc_free_page (token); 
 	return tid;
 }
 
@@ -260,7 +260,11 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	for (int i=2; i < curr->next_fd; i++){
+		file_close(curr->fdt[i]);
+	}
 
+	printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
 	process_cleanup ();
 }
 
@@ -741,3 +745,53 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
     if_->R.rdi = argc; /* 문자열의 개수 저장 */
     if_->R.rsi = if_->rsp + 16;  /*  문자열을 가리키는 주소들의 배열을 가리킴 */
 }
+
+ int process_add_file (struct file *f){
+	struct thread *curr = thread_current();
+	curr->fdt[curr->next_fd] = f;
+	curr->next_fd++;
+	return curr->next_fd;
+}
+struct file *process_get_file (int fd){
+	struct thread *curr = thread_current();
+	return curr->fdt[fd];
+}
+void process_close_file (int fd){
+	struct thread *curr = thread_current();
+	file_close(curr->fdt[fd]);
+	curr->fdt[fd] = 0;
+}
+
+// /* 자식 리스트를 검색하여 프로세스 디스크립터의 주소 리턴 */
+// struct thread *get_child_process(int pid)
+// {
+// 	struct thread *curr = thread_current();
+// 	struct list_elem *c_elem = list_begin(&curr->sibling_list);
+// 	while (c_elem != list_tail(&curr->sibling_list)){
+// 		struct thread *c_thread = list_entry(c_elem,struct thread,children_elem);
+// 		if (c_thread->tid == pid){
+// 			return curr;
+// 		}
+// 		c_elem = list_next(c_elem);
+// 	}
+// 	return NULL;
+// }
+
+// /* 프로세스 디스크립터를 자식 리스트에서 제거 후 메모리 해제 */
+// void remove_child_process(struct thread *cp)
+// {
+// 	struct thread *curr = thread_current();
+// 	struct list_elem *c_elem = list_begin(&curr->sibling_list);
+// 	while (c_elem != list_tail(&curr->sibling_list)){
+// 		struct thread *c_thread = list_entry(c_elem,struct thread,children_elem);
+// 		if (c_thread->tid == cp->tid){
+// 			          list_remove(&cp->children_elem);
+// 		}
+// 		else{
+// 			c_elem = list_next(c_elem);
+// 		}
+// 	}
+
+// 	//메모리 해제
+// 	//미완성입니다.
+// }

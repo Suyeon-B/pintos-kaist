@@ -107,11 +107,25 @@ struct thread
 	int nice; /* for aging */
 	int recent_cpu;
 	struct list_elem allelem; /* 모든 thread의 recent_cpu와 priority값 재계산하기 위함 */
-
+	
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
-	int exit_status;
+	struct thread* parent_t; /* 부모 프로세스의 디스크립터 */
+	struct list sibling_list; /* 자식 리스트 */
+	struct list_elem children_elem; /* 자식 리스트 element */
+
+	int load_flag;/* 프로세스의 프로그램 메모리 적재 유무 */
+	int exit_flag;/* 프로세스가 종료 유무 확인 */
+	// struct semaphore sema_exit;/* exit 세마포어 - type버그 나고있음!!!!!!!!!!! */
+	// struct semaphore sema_load;/* load 세마포어 */
+	int exit_status;/* exit 호출 시 종료 status */
+
+	/* file descriptor */
+	struct file *fdt[64];
+	int next_fd;
+
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

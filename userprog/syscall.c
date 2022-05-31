@@ -8,6 +8,7 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include <filesys/filesys.h>
+// 헤더 선언해야함!!!!!!!!!!!!!!!!!!
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -36,6 +37,8 @@ void syscall_init(void)
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			  FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+	lock_init(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -43,46 +46,70 @@ void syscall_handler(struct intr_frame *f UNUSED)
 {
 	// TODO: Your implementation goes here.
 	printf("system call!\n");
-	switch (f->R.rax)
+	switch (f->R.rax) /* rax : system call number */
 	{
 		/* Projects 2 and later. */
+		/* rdi, rsi, rdx, r10, r8, and r9 순으로 argument passing */
 		case SYS_HALT: /* Halt the operating system. */
+			printf("system call - halt!\n");
 			halt();
 			break;
 		case SYS_EXIT: /* Terminate this process. */
+			printf("system call - exit!\n");
 			exit(f->R.rdi);
 			break;
 		case SYS_FORK: /* Clone current process. */
+			printf("system call - fork!\n");
 			fork(f->R.rdi);
 			break;
 		case SYS_EXEC: /* Switch current process. */
+			printf("system call - exec!\n");
 			exec(f->R.rdi);
 			break;
 		case SYS_WAIT: /* Wait for a child process to die. */
+			printf("system call - wait!\n");
 			wait(f->R.rdi);
 			break;
 		case SYS_CREATE: /* Create a file. */
+			printf("system call - create!\n");
 			create(f->R.rdi, f->R.rsi);
 			break;
 		case SYS_REMOVE: /* Delete a file. */
+			printf("system call - remove!\n");
 			remove(f->R.rdi);
 			break;
 		case SYS_OPEN: /* Open a file. */
+			printf("system call - open!\n");
+			open(f->R.rdi);
 			break;
 		case SYS_FILESIZE: /* Obtain a file's size. */
+			printf("system call - filesize!\n");
+			filesize(f->R.rdi);
 			break;
 		case SYS_READ: /* Read from a file. */
+			printf("system call - read!\n");
+			read(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		case SYS_WRITE: /* Write to a file. */
+			printf("system call - write!\n");
+			write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		case SYS_SEEK: /* Change position in a file. */
+			printf("system call - seek!\n");
+			seek(f->R.rdi, f->R.rsi);
 			break;
 		case SYS_TELL: /* Report current position in a file. */
+			printf("system call - tell!\n");
+			tell(f->R.rdi);
 			break;
 		case SYS_CLOSE: /* Close a file. */
+			printf("system call - close!\n");
+			close(f->R.rdi);
 			break;
+		default:
+			printf("thread_exit - bye~!\n");
+			thread_exit();
 	}
-	thread_exit();
 }
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
@@ -99,6 +126,7 @@ void check_address(void *addr)
 	}
 }
 
+/* PintOS를 종료시킨다. */
 void halt(void)
 {
 	power_off();
@@ -116,7 +144,11 @@ void exit(int status)
 bool create(const char *file, unsigned initial_size)
 { /* 수상함 */
 	check_address(file);
-	return filesys_create(file, initial_size);
+	if (*file != NULL)
+	{ //수상함
+		return filesys_create(file, initial_size);
+	}
+	return false;
 }
 
 bool remove(const char *file)
@@ -136,15 +168,61 @@ int wait(pid_t pid)
 }
 int open(const char *file)
 {
+	struct file *open_file = filesys_open(file);
+	if (!open_file)
+	{
+		return -1;
+	}
+	return process_add_file(file);
 }
 int filesize(int fd)
 {
+	struct file *curr_file = thread_current()->fdt[fd];
+	if (!curr_file)
+	{
+		return -1;
+	}
+	return file_length(curr_file);
 }
 int read(int fd, void *buffer, unsigned length)
 {
+	lock_acquire(&filesys_lock);
+
+	struct file *curr_file = process_get_file(fd);
+	int result = -1;
+
+	if (fd == 0)
+	{
+		buffer = input_getc();
+		result = length;
+	}
+	if (file_read(curr_file, buffer, length))
+	{
+		result = file_read(curr_file, buffer, length);
+	}
+
+	lock_release(&filesys_lock);
+	return result;
 }
 int write(int fd, const void *buffer, unsigned length)
 {
+	lock_acquire(&filesys_lock);
+
+	struct file *curr_file = process_get_file(fd);
+	int result = -1;
+
+	if (fd == 1)
+	{
+		putbuf(buffer, length);
+		result = length;
+	}
+	if (file_write(curr_file, buffer, length))
+	{
+		result = file_write(curr_file, buffer, length);
+	}
+
+	lock_release(&filesys_lock);
+	return result;
 }
 void seek(int fd, unsigned position) 
 {

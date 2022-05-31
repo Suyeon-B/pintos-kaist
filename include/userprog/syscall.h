@@ -2,10 +2,14 @@
 #define USERPROG_SYSCALL_H
 
 #include <stdbool.h>
+#include "threads/synch.h"
+
 void syscall_init (void);
 void check_address(void *addr);
 
 /* Projects 2 and later. */
+struct lock filesys_lock;
+
 typedef int pid_t;
 
 void halt (void);

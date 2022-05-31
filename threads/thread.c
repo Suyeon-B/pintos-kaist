@@ -225,6 +225,23 @@ tid_t thread_create(const char *name, int priority,
 
 	list_push_back(&all_list, &t->allelem);
 
+#ifdef USERPROG
+	/* file descriptor 관련 자료구조 초기화 */
+	// t->fdt[0] = STDIN_FILENO;
+	// t->fdt[1] = STDOUT_FILENO; 
+	t->next_fd = 2; 
+
+	t->parent_t = thread_current();
+	t->load_flag = 0;
+	t->exit_flag = 0;
+	// sema_init(&t->sema_exit,0);
+	// sema_init(&t->sema_load,0);
+
+	list_push_back(&t->parent_t->sibling_list, &t->children_elem);
+
+	t->exit_status = 0;
+#endif
+
 	/* Add to run queue. */
 	thread_unblock(t);
 
@@ -577,6 +594,10 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
 
+#ifdef USERPROG
+	list_init(&t->sibling_list);
+#endif
+
 	/* MLFQ 자료구조 초기화 */
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
@@ -835,10 +856,7 @@ bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b,
 {
 	struct thread *da = list_entry(a, struct thread, donation_elem);
 	struct thread *db = list_entry(b, struct thread, donation_elem);
-	if (da->priority > db->priority)
-		return 1;
-	else
-		return 0;
+	return da->priority > db->priority;
 }
 
 /* recent_cpu와 nice값을 이용하여 priority를 계산 */
