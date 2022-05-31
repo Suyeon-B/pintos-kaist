@@ -9,6 +9,8 @@
 #include "intrinsic.h"
 #include <filesys/filesys.h>
 // 헤더 선언해야함!!!!!!!!!!!!!!!!!!
+/* 수연 추가 */
+#include "userprog/process.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -45,70 +47,70 @@ void syscall_init(void)
 void syscall_handler(struct intr_frame *f UNUSED)
 {
 	// TODO: Your implementation goes here.
-	printf("system call!\n");
+	// printf("system call!\n");
 	switch (f->R.rax) /* rax : system call number */
 	{
-		/* Projects 2 and later. */
-		/* rdi, rsi, rdx, r10, r8, and r9 순으로 argument passing */
-		case SYS_HALT: /* Halt the operating system. */
-			printf("system call - halt!\n");
-			halt();
-			break;
-		case SYS_EXIT: /* Terminate this process. */
-			printf("system call - exit!\n");
-			exit(f->R.rdi);
-			break;
-		case SYS_FORK: /* Clone current process. */
-			printf("system call - fork!\n");
-			fork(f->R.rdi);
-			break;
-		case SYS_EXEC: /* Switch current process. */
-			printf("system call - exec!\n");
-			exec(f->R.rdi);
-			break;
-		case SYS_WAIT: /* Wait for a child process to die. */
-			printf("system call - wait!\n");
-			wait(f->R.rdi);
-			break;
-		case SYS_CREATE: /* Create a file. */
-			printf("system call - create!\n");
-			create(f->R.rdi, f->R.rsi);
-			break;
-		case SYS_REMOVE: /* Delete a file. */
-			printf("system call - remove!\n");
-			remove(f->R.rdi);
-			break;
-		case SYS_OPEN: /* Open a file. */
-			printf("system call - open!\n");
-			open(f->R.rdi);
-			break;
-		case SYS_FILESIZE: /* Obtain a file's size. */
-			printf("system call - filesize!\n");
-			filesize(f->R.rdi);
-			break;
-		case SYS_READ: /* Read from a file. */
-			printf("system call - read!\n");
-			read(f->R.rdi, f->R.rsi, f->R.rdx);
-			break;
-		case SYS_WRITE: /* Write to a file. */
-			printf("system call - write!\n");
-			write(f->R.rdi, f->R.rsi, f->R.rdx);
-			break;
-		case SYS_SEEK: /* Change position in a file. */
-			printf("system call - seek!\n");
-			seek(f->R.rdi, f->R.rsi);
-			break;
-		case SYS_TELL: /* Report current position in a file. */
-			printf("system call - tell!\n");
-			tell(f->R.rdi);
-			break;
-		case SYS_CLOSE: /* Close a file. */
-			printf("system call - close!\n");
-			close(f->R.rdi);
-			break;
-		default:
-			printf("thread_exit - bye~!\n");
-			thread_exit();
+	/* Projects 2 and later. */
+	/* rdi, rsi, rdx, r10, r8, and r9 순으로 argument passing */
+	case SYS_HALT: /* Halt the operating system. */
+		// printf("system call - halt!\n");
+		halt();
+		break;
+	case SYS_EXIT: /* Terminate this process. */
+		// printf("system call - exit!\n");
+		exit(f->R.rdi);
+		break;
+	case SYS_FORK: /* Clone current process. */
+		// printf("system call - fork!\n");
+		fork(f->R.rdi);
+		break;
+	case SYS_EXEC: /* Switch current process. */
+		// printf("system call - exec!\n");
+		exec(f->R.rdi);
+		break;
+	case SYS_WAIT: /* Wait for a child process to die. */
+		// printf("system call - wait!\n");
+		wait(f->R.rdi);
+		break;
+	case SYS_CREATE: /* Create a file. */
+		// printf("system call - create!\n");
+		create(f->R.rdi, f->R.rsi);
+		break;
+	case SYS_REMOVE: /* Delete a file. */
+		// printf("system call - remove!\n");
+		remove(f->R.rdi);
+		break;
+	case SYS_OPEN: /* Open a file. */
+		// printf("system call - open!\n");
+		open(f->R.rdi);
+		break;
+	case SYS_FILESIZE: /* Obtain a file's size. */
+		// printf("system call - filesize!\n");
+		filesize(f->R.rdi);
+		break;
+	case SYS_READ: /* Read from a file. */
+		// printf("system call - read!\n");
+		read(f->R.rdi, f->R.rsi, f->R.rdx);
+		break;
+	case SYS_WRITE: /* Write to a file. */
+		// printf("system call - write!\n");
+		write(f->R.rdi, f->R.rsi, f->R.rdx);
+		break;
+	case SYS_SEEK: /* Change position in a file. */
+		// printf("system call - seek!\n");
+		seek(f->R.rdi, f->R.rsi);
+		break;
+	case SYS_TELL: /* Report current position in a file. */
+		// printf("system call - tell!\n");
+		tell(f->R.rdi);
+		break;
+	case SYS_CLOSE: /* Close a file. */
+		// printf("system call - close!\n");
+		close(f->R.rdi);
+		break;
+	default:
+		// printf("thread_exit - bye~!\n");
+		thread_exit();
 	}
 }
 
@@ -133,11 +135,11 @@ void halt(void)
 }
 
 void exit(int status)
-{ /* 수상함 */
+{
 	struct thread *cur = thread_current();
 	/* Save exit status at process descriptor */
 	cur->exit_status = status;
-	printf("%s: exit(%d)\n", cur->name, status);
+	// printf("%s: exit(%d)\n", cur->name, status); /* 수연 수정 - 이거 thread_exit에서 또 찍힘 */
 	thread_exit();
 }
 
@@ -160,12 +162,15 @@ bool remove(const char *file)
 pid_t fork(const char *thread_name)
 {
 }
+
 int exec(const char *file)
 {
 }
+
 int wait(pid_t pid)
 {
 }
+
 int open(const char *file)
 {
 	struct file *open_file = filesys_open(file);
@@ -175,6 +180,7 @@ int open(const char *file)
 	}
 	return process_add_file(file);
 }
+
 int filesize(int fd)
 {
 	struct file *curr_file = thread_current()->fdt[fd];
@@ -200,43 +206,66 @@ int read(int fd, void *buffer, unsigned length)
 	{
 		result = file_read(curr_file, buffer, length);
 	}
-
 	lock_release(&filesys_lock);
 	return result;
 }
+
 int write(int fd, const void *buffer, unsigned length)
 {
-	lock_acquire(&filesys_lock);
-
-	struct file *curr_file = process_get_file(fd);
-	int result = -1;
-
-	if (fd == 1)
+	/* 수연 수정 */
+	check_address(buffer);
+	struct file *fileobj = process_get_file(fd);
+	int read_count;
+	if (fd == STDOUT_FILENO)
 	{
 		putbuf(buffer, length);
-		result = length;
+		// read_count = length;
 	}
-	if (file_write(curr_file, buffer, length))
+
+	else if (fd == STDIN_FILENO)
 	{
-		result = file_write(curr_file, buffer, length);
+		return -1;
 	}
 
-	lock_release(&filesys_lock);
-	return result;
-}
-void seek(int fd, unsigned position) 
-{
+	else
+	{
 
-}
-unsigned tell(int fd) 
-{
+		lock_acquire(&filesys_lock);
+		// read_count = file_write(fileobj, buffer, length);
+		file_write(fileobj, buffer, length);
+		lock_release(&filesys_lock);
+	}
+	// lock_acquire(&filesys_lock);
 
-}
-void close(int fd) 
-{
+	// struct file *curr_file = process_get_file(fd);
+	// int result = -1;
 
-}
-int dup2(int oldfd, int newfd) 
-{
+	// if (fd == 1)
+	// {
+	// 	putbuf(buffer, length);
+	// 	result = length;
+	// }
+	// if (file_write(curr_file, buffer, length))
+	// {
+	// 	result = file_write(curr_file, buffer, length);
+	// }
 
+	// lock_release(&filesys_lock);
+	// return result;
+}
+
+void seek(int fd, unsigned position)
+{
+}
+
+unsigned tell(int fd)
+{
+}
+
+void close(int fd)
+{
+}
+
+int dup2(int oldfd, int newfd)
+{
 }

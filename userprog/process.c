@@ -221,7 +221,7 @@ process_exec (void *f_name) { //프로세스 실행 - 실행하려는 바이너�
     //유저 프로그램이 실행되기 전에 스택에 인자 저장
 	argument_stack(token_count, arg_list, &_if); 
 	void **rspp = &_if.rsp;
-    hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
+    // hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
 	/* Start switched process. 
 		생성된 프로*/
