@@ -748,13 +748,18 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
     if_->R.rsi = if_->rsp + 16;  /*  문자열을 가리키는 주소들의 배열을 가리킴 */
 }
 
- int process_add_file (struct file *f){
+int process_add_file (struct file *f){
 	struct thread *curr = thread_current();
+	if (curr->next_fd >= 63){
+		return -1;
+	}
 	curr->fdt[curr->next_fd] = f;
 	curr->next_fd++;
-	return curr->next_fd;
+	return curr->next_fd - 1;
 }
 struct file *process_get_file (int fd){
+	if (fd < 0 || fd > 63)
+		return NULL;
 	struct thread *curr = thread_current();
 	return curr->fdt[fd];
 }

@@ -11,6 +11,7 @@
 // 헤더 선언해야함!!!!!!!!!!!!!!!!!!
 /* 수연 추가 */
 #include "userprog/process.h"
+#include "filesys/file.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -118,11 +119,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 void check_address(void *addr)
 {
-	if (!is_user_vaddr(addr))
-	{
-		exit(-1);
-	}
-	if (pml4_get_page(thread_current()->pml4, addr) == NULL)
+	if (!is_user_vaddr(addr) || !(pml4_get_page(thread_current()->pml4, addr)))
 	{
 		exit(-1);
 	}
@@ -138,7 +135,7 @@ void exit(int status)
 {
 	struct thread *cur = thread_current();
 	/* Save exit status at process descriptor */
-	cur->exit_status = status;
+	// cur->exit_status = status;
 	printf("%s: exit(%d)\n", cur->name, status);
 	thread_exit();
 }
@@ -146,18 +143,20 @@ void exit(int status)
 bool create(const char *file, unsigned initial_size)
 { /* 수상함 */
 	check_address(file);
-	if (*file != NULL)
-	{ //수상함
-		return filesys_create(file, initial_size);
+	if (filesys_create(file, initial_size)){
+		return true;
 	}
-	// return false;
-	return false; // 수연 수정
+	return false;
 }
 
 bool remove(const char *file)
 {
 	check_address(file);
-	return filesys_remove(file);
+	if (filesys_remove(file)) {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 pid_t fork(const char *thread_name)
@@ -179,12 +178,16 @@ int open(const char *file)
 	{
 		return -1;
 	}
-	return process_add_file(file);
+	int fd = process_add_file(open_file);
+	if(fd == -1){
+		file_close(open_file);
+	}
+	return fd;
 }
 
 int filesize(int fd)
 {
-	struct file *curr_file = thread_current()->fdt[fd];
+	struct file *curr_file = process_get_file(fd);
 	if (!curr_file)
 	{
 		return -1;
@@ -193,64 +196,59 @@ int filesize(int fd)
 }
 int read(int fd, void *buffer, unsigned length)
 {
-	lock_acquire(&filesys_lock);
-
+	check_address(buffer);
 	struct file *curr_file = process_get_file(fd);
-	int result = -1;
+	char val;
+	int count = 0;
 
-	if (fd == 0)
+	unsigned char *buf = buffer; //1바이트씩 저장하기 위해
+
+
+	if (fd == 0) //STDIN_FILENO : 사용자 입력 읽기
 	{
-		buffer = input_getc();
-		result = length;
+		for (count=0;count<length;count++){
+			val = input_getc(); //키보드 입력받은 문자를 반환하는 함수
+			*buf++ = val;
+			if (val == '\n')
+				break;
+		}
 	}
-	if (file_read(curr_file, buffer, length))
+	else if (fd == 1) //잘못된 입력
 	{
-		result = file_read(curr_file, buffer, length);
+		return -1;
 	}
-	lock_release(&filesys_lock);
-	return result;
+	else // 파일 읽기
+	{
+		lock_acquire(&filesys_lock);
+		count = file_read(curr_file, buffer, length);
+		lock_release(&filesys_lock);
+	}
+	return count;
 }
 
 int write(int fd, const void *buffer, unsigned length)
 {
 	/* 수연 수정 */
 	check_address(buffer);
-	struct file *fileobj = process_get_file(fd);
+	struct file *curr_file = process_get_file(fd);
 	int read_count;
-	if (fd == STDOUT_FILENO)
+	if (fd == 1) //STDOUT_FILENO 
 	{
-		putbuf(buffer, length);
-		// read_count = length;
+		putbuf(buffer, length); //문자열을 화면에 출력해주는 함수
+		read_count = length;
 	}
-	else if (fd == STDIN_FILENO)
+	else if (fd == 0)
 	{
 		return -1;
 	}
 	else
 	{
-
 		lock_acquire(&filesys_lock);
-		// read_count = file_write(fileobj, buffer, length);
-		file_write(fileobj, buffer, length);
+		read_count = file_write(curr_file, buffer, length);
+		//file_write(fileobj, buffer, length);
 		lock_release(&filesys_lock);
 	}
-	// lock_acquire(&filesys_lock);
-
-	// struct file *curr_file = process_get_file(fd);
-	// int result = -1;
-
-	// if (fd == 1)
-	// {
-	// 	putbuf(buffer, length);
-	// 	result = length;
-	// }
-	// if (file_write(curr_file, buffer, length))
-	// {
-	// 	result = file_write(curr_file, buffer, length);
-	// }
-
-	// lock_release(&filesys_lock);
-	// return result;
+	return read_count;
 }
 
 void seek(int fd, unsigned position)
