@@ -9,7 +9,10 @@ struct file {
 	off_t pos;                  /* Current position. */
 	bool deny_write;            /* Has file_deny_write() been called? */
 };
-
+/*
+	파일은 각자 저수준 이름을 가지고 있으며, 보통 숫자로 표현되며 inode number라고 부른다.
+	각 파일은 아이노드 번호와 연결되어있다. 
+*/
 /* Opens a file for the given INODE, of which it takes ownership,
  * and returns the new file.  Returns a null pointer if an
  * allocation fails or if INODE is null. */
