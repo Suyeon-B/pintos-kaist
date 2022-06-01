@@ -119,7 +119,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 void check_address(void *addr)
 {
-	if (!(*(char *)addr)|| !is_user_vaddr(addr) || !(pml4_get_page(thread_current()->pml4, addr)))
+	if (!is_user_vaddr(addr) || !(pml4_get_page(thread_current()->pml4, addr)))
 	{
 		exit(-1);
 	}
@@ -142,7 +142,9 @@ void exit(int status)
 bool create(const char *file, unsigned initial_size)
 { /* 수상함 */
 	check_address(file);
-
+	if(*file==NULL){
+		exit(-1);
+	}
 	return filesys_create(file, initial_size);
 }
 
@@ -175,11 +177,12 @@ int wait(pid_t pid)
 int open(const char *file)
 {
 	check_address(file);
-	struct file *open_file = filesys_open(file);
-	if (!open_file)
+	if (*file == NULL)
 	{
 		return -1;
 	}
+	struct file *open_file = filesys_open(file);
+	
 	int fd = process_add_file(open_file); // 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게
 	if(fd == -1){
 		file_close(open_file);
@@ -247,7 +250,6 @@ int write(int fd, const void *buffer, unsigned length)
 	{
 		lock_acquire(&filesys_lock);
 		read_count = file_write(curr_file, buffer, length);
-		//file_write(fileobj, buffer, length);
 		lock_release(&filesys_lock);
 	}
 	return read_count;
@@ -256,15 +258,26 @@ int write(int fd, const void *buffer, unsigned length)
 void seek(int fd, unsigned position)
 {
 	struct file *curr_file = process_get_file(fd);
-	// curr_file.pos = 
+	if (curr_file){
+		file_seek(curr_file, position);
+	}
 }
 
 unsigned tell(int fd)
 {
+	struct file *curr_file = process_get_file(fd);
+	if (curr_file){
+		return file_tell(curr_file);
+	}
+	return -1;
 }
 
 void close(int fd)
 {
+	struct file *curr_file = process_get_file(fd);
+	struct thread *curr_thread = thread_current();
+	curr_thread->fdt[fd] = 0;
+	file_close(curr_file);
 }
 
 int dup2(int oldfd, int newfd)
