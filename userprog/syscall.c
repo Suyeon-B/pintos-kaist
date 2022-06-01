@@ -12,6 +12,7 @@
 /* 수연 추가 */
 #include "userprog/process.h"
 #include "filesys/file.h"
+#include <string.h>
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -63,39 +64,39 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_FORK: /* Clone current process. */
 		// printf("system call - fork!\n");
-		fork(f->R.rdi);
+		f->R.rax = fork(f->R.rdi);
 		break;
 	case SYS_EXEC: /* Switch current process. */
 		// printf("system call - exec!\n");
-		exec(f->R.rdi);
+		f->R.rax = exec(f->R.rdi);
 		break;
 	case SYS_WAIT: /* Wait for a child process to die. */
 		// printf("system call - wait!\n");
-		wait(f->R.rdi);
+		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_CREATE: /* Create a file. */
 		// printf("system call - create!\n");
-		create(f->R.rdi, f->R.rsi);
+		f->R.rax = create(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_REMOVE: /* Delete a file. */
 		// printf("system call - remove!\n");
-		remove(f->R.rdi);
+		f->R.rax = remove(f->R.rdi);
 		break;
 	case SYS_OPEN: /* Open a file. */
 		// printf("system call - open!\n");
-		open(f->R.rdi);
+		f->R.rax = open(f->R.rdi);
 		break;
 	case SYS_FILESIZE: /* Obtain a file's size. */
 		// printf("system call - filesize!\n");
-		filesize(f->R.rdi);
+		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ: /* Read from a file. */
 		// printf("system call - read!\n");
-		read(f->R.rdi, f->R.rsi, f->R.rdx);
+		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE: /* Write to a file. */
 		// printf("system call - write!\n");
-		write(f->R.rdi, f->R.rsi, f->R.rdx);
+		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK: /* Change position in a file. */
 		// printf("system call - seek!\n");
@@ -103,7 +104,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_TELL: /* Report current position in a file. */
 		// printf("system call - tell!\n");
-		tell(f->R.rdi);
+		f->R.rax = tell(f->R.rdi);
 		break;
 	case SYS_CLOSE: /* Close a file. */
 		// printf("system call - close!\n");
@@ -135,14 +136,15 @@ void exit(int status)
 {
 	/* Save exit status at process descriptor */
 	thread_current()->exit_status = status;
-	printf("%s: exit(%d)\n",thread_name(), status);
+	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit();
 }
 
 bool create(const char *file, unsigned initial_size)
 { /* 수상함 */
 	check_address(file);
-	if(*file==NULL){
+	if (*file == NULL)
+	{
 		exit(-1);
 	}
 	return filesys_create(file, initial_size);
@@ -151,9 +153,12 @@ bool create(const char *file, unsigned initial_size)
 bool remove(const char *file)
 {
 	check_address(file);
-	if (filesys_remove(file)) {
+	if (filesys_remove(file))
+	{
 		return true;
-	} else {
+	}
+	else
+	{
 		return false;
 	}
 }
@@ -177,17 +182,20 @@ int wait(pid_t pid)
 int open(const char *file)
 {
 	check_address(file);
-	if (*file == NULL)
+	struct file *open_file = filesys_open(file);
+	if (!open_file)
 	{
 		return -1;
 	}
-	struct file *open_file = filesys_open(file);
-	
-	int fd = process_add_file(open_file); // 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게
-	if(fd == -1){
-		file_close(open_file);
+	else
+	{
+		int fd = process_add_file(open_file); // 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게
+		if (fd == -1)
+		{
+			file_close(open_file);
+		}
+		return fd;
 	}
-	return fd;
 }
 
 int filesize(int fd)
@@ -206,12 +214,12 @@ int read(int fd, void *buffer, unsigned length)
 	char val;
 	int count = 0;
 
-	unsigned char *buf = buffer; //1바이트씩 저장하기 위해
+	unsigned char *buf = buffer; // 1바이트씩 저장하기 위해
 
-
-	if (fd == 0) //STDIN_FILENO : 사용자 입력 읽기
+	if (fd == 0) // STDIN_FILENO : 사용자 입력 읽기
 	{
-		for (count=0;count<length;count++){
+		for (count = 0; count < length; count++)
+		{
 			val = input_getc(); //키보드 입력받은 문자를 반환하는 함수
 			*buf++ = val;
 			if (val == '\n')
@@ -237,7 +245,7 @@ int write(int fd, const void *buffer, unsigned length)
 	check_address(buffer);
 	struct file *curr_file = process_get_file(fd);
 	int read_count;
-	if (fd == 1) //STDOUT_FILENO 
+	if (fd == 1) // STDOUT_FILENO
 	{
 		putbuf(buffer, length); //문자열을 화면에 출력해주는 함수
 		read_count = length;
@@ -258,7 +266,8 @@ int write(int fd, const void *buffer, unsigned length)
 void seek(int fd, unsigned position)
 {
 	struct file *curr_file = process_get_file(fd);
-	if (curr_file){
+	if (curr_file)
+	{
 		file_seek(curr_file, position);
 	}
 }
@@ -266,7 +275,8 @@ void seek(int fd, unsigned position)
 unsigned tell(int fd)
 {
 	struct file *curr_file = process_get_file(fd);
-	if (curr_file){
+	if (curr_file)
+	{
 		return file_tell(curr_file);
 	}
 	return -1;
