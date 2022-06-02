@@ -8,7 +8,7 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
-#include "threads/synch.h"
+#include "threads/synch.h" /* 헤더 선언 부분 .h랑 같으면 빼도 되나 확인해보기 */
 #include "threads/vaddr.h"
 #include "threads/fixed_point.h"
 #include "intrinsic.h"
@@ -227,15 +227,15 @@ tid_t thread_create(const char *name, int priority,
 
 #ifdef USERPROG
 	/* file descriptor 관련 자료구조 초기화 */
-	// t->fdt[0] = STDIN_FILENO;
-	// t->fdt[1] = STDOUT_FILENO; 
+	t->fdt[0] = STDIN_FILENO;
+	t->fdt[1] = STDOUT_FILENO; 
 	t->next_fd = 2; 
 
 	t->parent_t = thread_current();
 	t->load_flag = 0;
 	t->exit_flag = 0;
-	// sema_init(&t->sema_exit,0);
-	// sema_init(&t->sema_load,0);
+	sema_init(&t->sema_exit,0);
+	sema_init(&t->sema_load,0);
 
 	list_push_back(&t->parent_t->sibling_list, &t->children_elem);
 

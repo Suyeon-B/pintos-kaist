@@ -12,8 +12,8 @@ void process_activate(struct thread *next);
 void argument_stack(int argc, char **argv, struct intr_frame *if_);
 
 // file descriptor
-// struct thread *get_child_process(int pid);
-// void remove_child_process(struct thread *cp);
+struct thread *get_child_process(int pid);
+void remove_child_process(struct thread *cp);
 int process_add_file (struct file *f);
 struct file *process_get_file (int fd);
 void process_close_file (int fd);

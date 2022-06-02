@@ -6,15 +6,15 @@ __attribute__((always_inline))
 static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 		uint64_t a3_, uint64_t a4_, uint64_t a5_, uint64_t a6_) {
 	int64_t ret;
-	register uint64_t *num asm ("rax") = (uint64_t *) num_;
-	register uint64_t *a1 asm ("rdi") = (uint64_t *) a1_;
-	register uint64_t *a2 asm ("rsi") = (uint64_t *) a2_;
-	register uint64_t *a3 asm ("rdx") = (uint64_t *) a3_;
-	register uint64_t *a4 asm ("r10") = (uint64_t *) a4_;
-	register uint64_t *a5 asm ("r8") = (uint64_t *) a5_;
-	register uint64_t *a6 asm ("r9") = (uint64_t *) a6_;
+	register uint64_t *num asm ("rax") = (uint64_t *) num_;	/* syscall # */
+	register uint64_t *a1 asm ("rdi") = (uint64_t *) a1_;	/* arg1 */
+	register uint64_t *a2 asm ("rsi") = (uint64_t *) a2_;	/* arg2 */
+	register uint64_t *a3 asm ("rdx") = (uint64_t *) a3_;	/* arg3 */
+	register uint64_t *a4 asm ("r10") = (uint64_t *) a4_;	/* arg4 */
+	register uint64_t *a5 asm ("r8") = (uint64_t *) a5_;	/* arg5 */
+	register uint64_t *a6 asm ("r9") = (uint64_t *) a6_;	/* arg6 */
 
-	__asm __volatile(
+	__asm __volatile(	
 			"mov %1, %%rax\n"
 			"mov %2, %%rdi\n"
 			"mov %3, %%rsi\n"
@@ -22,7 +22,7 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 			"mov %5, %%r10\n"
 			"mov %6, %%r8\n"
 			"mov %7, %%r9\n"
-			"syscall\n"
+			"syscall\n"			/* 현재 레지스터에 담겨있는 값을 기준으로 알맞은 syscall을 해주는 어셈블리 명령어 */
 			: "=a" (ret)
 			: "g" (num), "g" (a1), "g" (a2), "g" (a3), "g" (a4), "g" (a5), "g" (a6)
 			: "cc", "memory");

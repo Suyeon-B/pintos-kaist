@@ -8,11 +8,12 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include <filesys/filesys.h>
-// 헤더 선언해야함!!!!!!!!!!!!!!!!!!
-/* 수연 추가 */
+
+/* 추가로 선언한 부분 */
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include <string.h>
+#include "threads/palloc.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -48,79 +49,64 @@ void syscall_init(void)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
-	// TODO: Your implementation goes here.
-	// printf("system call!\n");
 	switch (f->R.rax) /* rax : system call number */
 	{
 	/* Projects 2 and later. */
 	/* rdi, rsi, rdx, r10, r8, and r9 순으로 argument passing */
+	/* system call 반환값은 rax에 담아준다. */
 	case SYS_HALT: /* Halt the operating system. */
-		// printf("system call - halt!\n");
 		halt();
 		break;
 	case SYS_EXIT: /* Terminate this process. */
-		// printf("system call - exit!\n");
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK: /* Clone current process. */
-		// printf("system call - fork!\n");
 		f->R.rax = fork(f->R.rdi);
 		break;
 	case SYS_EXEC: /* Switch current process. */
-		// printf("system call - exec!\n");
 		f->R.rax = exec(f->R.rdi);
 		break;
 	case SYS_WAIT: /* Wait for a child process to die. */
-		// printf("system call - wait!\n");
 		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_CREATE: /* Create a file. */
-		// printf("system call - create!\n");
 		f->R.rax = create(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_REMOVE: /* Delete a file. */
-		// printf("system call - remove!\n");
 		f->R.rax = remove(f->R.rdi);
 		break;
 	case SYS_OPEN: /* Open a file. */
-		// printf("system call - open!\n");
 		f->R.rax = open(f->R.rdi);
 		break;
 	case SYS_FILESIZE: /* Obtain a file's size. */
-		// printf("system call - filesize!\n");
 		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ: /* Read from a file. */
-		// printf("system call - read!\n");
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE: /* Write to a file. */
-		// printf("system call - write!\n");
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK: /* Change position in a file. */
-		// printf("system call - seek!\n");
 		seek(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_TELL: /* Report current position in a file. */
-		// printf("system call - tell!\n");
 		f->R.rax = tell(f->R.rdi);
 		break;
 	case SYS_CLOSE: /* Close a file. */
-		// printf("system call - close!\n");
 		close(f->R.rdi);
 		break;
 	default:
-		// printf("thread_exit - bye~!\n");
 		thread_exit();
 	}
 }
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
-유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
+   유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 void check_address(void *addr)
 {
-	if (!is_user_vaddr(addr) || !(pml4_get_page(thread_current()->pml4, addr)))
+	if (!is_user_vaddr(addr) ||
+		!(pml4_get_page(thread_current()->pml4, addr)))
 	{
 		exit(-1);
 	}
@@ -132,16 +118,21 @@ void halt(void)
 	power_off();
 }
 
+/* Save exit status at process descriptor */
+/* 현재 스레드 상태를 exit status로 저장하고,
+   종료 메세지와 함께 스레드를 종료시킨다. */
 void exit(int status)
 {
-	/* Save exit status at process descriptor */
 	thread_current()->exit_status = status;
 	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit();
 }
 
+/* 주소값이 user 영역에 속하는지 확인하고,
+   맞다면 파일을 생성한다.
+   return value : T/F */
 bool create(const char *file, unsigned initial_size)
-{ /* 수상함 */
+{
 	check_address(file);
 	if (*file == NULL)
 	{
@@ -150,35 +141,31 @@ bool create(const char *file, unsigned initial_size)
 	return filesys_create(file, initial_size);
 }
 
+/* 파일을 삭제한다.
+   return value : T/F */
 bool remove(const char *file)
 {
 	check_address(file);
-	if (filesys_remove(file))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
+	return filesys_remove(file);
+}
+
+/* 자식 프로세스를 생성하고 프로그램을 실행시키는 시스템 콜 */
+int exec(const char *cmd_line)
+{
+}
+
+int wait(pid_t pid)
+{
+	/* 자식 프로세스가 종료 될 때까지 대기 */
+	// process_wait(pid);
 }
 
 pid_t fork(const char *thread_name)
 {
 }
 
-int exec(const char *file)
-{
-}
-
-int wait(pid_t pid)
-{
-}
-
-/*
-	사용자 프로세스가 파일에 접근하기 위한 시스템콜
-	fd 반환
-*/
+/* 사용자 프로세스가 파일에 접근하기 위한 시스템콜
+   return value : fd/-1 */
 int open(const char *file)
 {
 	check_address(file);
@@ -207,6 +194,7 @@ int filesize(int fd)
 	}
 	return file_length(curr_file);
 }
+
 int read(int fd, void *buffer, unsigned length)
 {
 	check_address(buffer);
@@ -241,7 +229,6 @@ int read(int fd, void *buffer, unsigned length)
 
 int write(int fd, const void *buffer, unsigned length)
 {
-	/* 수연 수정 */
 	check_address(buffer);
 	struct file *curr_file = process_get_file(fd);
 	int read_count;

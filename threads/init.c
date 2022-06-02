@@ -90,14 +90,13 @@ main (void) {
 #ifdef USERPROG
 	tss_init ();
 	gdt_init ();
-#endif
 
 	/* Initialize interrupt handlers. */
 	intr_init ();
 	timer_init ();
 	kbd_init ();
 	input_init ();
-#ifdef USERPROG
+
 	exception_init ();
 	syscall_init ();
 #endif
