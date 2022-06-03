@@ -41,13 +41,14 @@ process_init(void)
  * Notice that THIS SHOULD BE CALLED ONCE.
  * = ppt에서 process_execute() */
 tid_t process_create_initd(const char *file_name)
-{ //실행파일의 이름을 가져온다. (커멘드라인???)
+{ 
+	//실행파일의 이름을 가져온다. (커멘드라인???)
 	char *fn_copy;
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page(0);
+	fn_copy = palloc_get_page(PAL_ZERO);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy(fn_copy, file_name, PGSIZE);
@@ -183,7 +184,6 @@ int process_exec(void *f_name)
 { //프로세스 실행 - 실행하려는 바이너리 파일 이름을 가져옴
 	char *file_name = f_name;
 	char *file_name_copy; //파싱해서 담아주기 - 파일을 담을수있
-	// char *file_name_copy[48]; //48 왜???
 	bool success;
 
 	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
@@ -210,7 +210,6 @@ int process_exec(void *f_name)
 
 	while (token != NULL)
 	{
-		// printf("%d == %s\n",token_count,token);
 		token = strtok_r(NULL, " ", &last);
 		token_count++;
 		arg_list[token_count] = token;
@@ -220,11 +219,13 @@ int process_exec(void *f_name)
 	success = load(arg_list[0], &_if); //해당 바이너리 파일을 메모리에 로드하기
 
 	/* 메모리 적재 완료 시 부모 프로세스 다시 진행 (세마포어 이용) */
-
+	thread_current()->load_flag = 1; /* load flag 세움 */
+	sema_up(&thread_current()->sema_load);
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
 		/* 메모리 적재 실패 시 프로세스 디스크립터(struct thread)에 메모리 적재 실패 */
+		// return -1;
 		thread_exit();
 	// return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
 
@@ -259,25 +260,31 @@ int process_wait(tid_t child_tid UNUSED)
 	 * XXX:       implementing the process_wait. */
 
 	/* 자식 프로세스의 프로세스 디스크립터(struct thread) 검색 */
-	// struct thread *c_thread = get_child_process(child_tid);
-	// /* 예외 처리 발생시 -1 리턴 */
-	// if (!c_thread)
-	// {
-	// 	return -1;
-	// }
+	struct thread *curr = thread_current();
+	struct thread *c_thread = get_child_process(child_tid);
+	
+	/* 예외 처리 발생시 -1 리턴 */
+	if (!c_thread // If TID is invalid
+			|| c_thread->parent_t != curr // if it was not a child of the calling process
+			|| c_thread->exit_flag == 1) // if process_wait() has already been successfully called for the given TID
+	{
+		return -1;
+	}
+
 	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용) */
-	// sema_down(&c_thread->parent_t->sema_exit);
-	// c_thread->status != THREAD_DYING
-	// sema_up(&c_thread->parent_t->sema_exit);
+	sema_down(&c_thread->parent_t->sema_exit);
+	process_exec(c_thread->name); /* pintos_all ppt p.87 */
 	/* 자식 프로세스 디스크립터 삭제 */
-	// remove_child_process(c_thread);
+	remove_child_process(c_thread);
+	sema_up(&c_thread->parent_t->sema_exit);
+
 	/* 자식 프로세스의 exit status 리턴 */
-	// return c_thread->exit_status;
+	return c_thread->exit_status;
 
 	// for (int i = 0; i < 100000000; i++)
 	// {
 	// }
-	return -1;
+	// return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -293,9 +300,6 @@ void process_exit(void)
 		file_close(curr->fdt[i]);
 	}
 
-	// #ifdef USERPROG
-	// 	printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
-	// #endif
 	process_cleanup();
 }
 
@@ -427,9 +431,10 @@ load(const char *file_name, struct intr_frame *if_)
 	// // ////////////!!!!!!!!!!!!!!!
 	// char *token, *save_ptr; //토큰, 분리되고 남은 문자열
 	// token = strtok_r(fn_copy," ",&save_ptr); // 첫번째 인자
-
+	// printf("no-such-file 이라고 떠야 함 : %s", file_name); /* 지워 */
 	file = filesys_open(file_name); //프로그램 파일 오픈
 
+	// printf("load: %s: open failed?\n", file_name);
 	if (file == NULL)
 	{
 		printf("load: %s: open failed\n", file_name);
@@ -818,7 +823,7 @@ void process_close_file(int fd)
 	curr->fdt[fd] = 0;
 }
 
-/* 자식 리스트를 검색하여 프로세스 디스크립터의 주소 리턴 */
+/* 자식 리스트를 검색하여 struct thread의 주소 리턴 */
 struct thread *get_child_process(int pid)
 {
 	struct thread *curr = thread_current();
@@ -828,27 +833,16 @@ struct thread *get_child_process(int pid)
 		struct thread *c_thread = list_entry(c_elem, struct thread, children_elem);
 		if (c_thread->tid == pid)
 		{
-			return curr;
+			return c_thread;
 		}
 		c_elem = list_next(c_elem);
 	}
 	return NULL;
 }
 
-// /* 프로세스 디스크립터를 자식 리스트에서 제거 후 메모리 해제 */
-void remove_child_process(struct thread *cp)
+/* child의 struct thread 를 자식 리스트에서 제거 후 메모리 해제 */
+void remove_child_process(struct thread *cp) 
 {
-	// struct thread *curr = thread_current();
-	// struct list_elem *c_elem = list_begin(&curr->sibling_list);
-	// while (c_elem != list_tail(&curr->sibling_list)){
-	// 	struct thread *c_thread = list_entry(c_elem,struct thread,children_elem);
-	// 	if (c_thread->tid == cp->tid){
-	// 		list_remove(&cp->children_elem);
-	// 	}
-	// 	else{
-	// 		c_elem = list_next(c_elem);
-	// 	}
-	// }
 	list_remove(&cp->children_elem);
-	thread_exit();
+	palloc_free_page(cp->name);
 }
