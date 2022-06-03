@@ -401,6 +401,9 @@ void thread_exit(void)
 #ifdef USERPROG
 	process_exit();
 	thread_current()->exit_flag = 1; /* 종료 flag 세움 */
+	if (&thread_current()->parent_t){
+		sema_up(&thread_current()->parent_t->sema_exit); /* 자식이 끝날 때 up해줌 */
+	}
 #endif
 	/* 스레드 종료 시 all_list에서 제거 */
 	list_remove(&thread_current()->allelem);

@@ -122,6 +122,9 @@ struct thread
 	struct semaphore sema_load;/* load 세마포어 */
 	int exit_status;/* exit 호출 시 종료 status */
 
+	/* 수연 추가 */
+	// int exec_flag;
+
 	/* file descriptor */
 	struct file *fdt[64];
 	int next_fd;

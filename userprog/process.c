@@ -86,6 +86,7 @@ initd(void *f_name)
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
+
 	/* Clone current thread to new thread.*/
 	return thread_create(name,
 						 PRI_DEFAULT, __do_fork, thread_current());
@@ -161,8 +162,12 @@ __do_fork(void *aux)
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
-
+	 * TODO:       the resources of parent. */
+	/* 수연 추가 */
+	struct file *c_file = file_duplicate(parent->fdt);
+	if (!c_file){
+		succ = false;
+	}
 	process_init();
 
 	/* Finally, switch to the newly created process. */
@@ -220,15 +225,15 @@ int process_exec(void *f_name)
 
 	/* 메모리 적재 완료 시 부모 프로세스 다시 진행 (세마포어 이용) */
 	thread_current()->load_flag = 1; /* load flag 세움 */
+	// thread_current()->exec_flag = 1; /* exec flag 세움 */
 	sema_up(&thread_current()->sema_load);
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
 		/* 메모리 적재 실패 시 프로세스 디스크립터(struct thread)에 메모리 적재 실패 */
-		// return -1;
+		// return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
 		thread_exit();
-	// return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
-
+	
 	/* 메모리 적재 성공 시 프로세스 디스크립터(struct thread)에 메모리 적재 성공 */
 
 	//유저 프로그램이 실행되기 전에 스택에 인자 저장
@@ -236,8 +241,7 @@ int process_exec(void *f_name)
 	void **rspp = &_if.rsp;
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
-	/* Start switched process.
-		생성된 프로*/
+	/* Start switched process. */
 	do_iret(&_if); // 유저 프로그램 실행
 	NOT_REACHED();
 }
@@ -273,11 +277,11 @@ int process_wait(tid_t child_tid UNUSED)
 
 	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용) */
 	sema_down(&c_thread->parent_t->sema_exit);
-	process_exec(c_thread->name); /* pintos_all ppt p.87 */
+	// process_exec(c_thread->name); /* pintos_all ppt p.87 */
 	/* 자식 프로세스 디스크립터 삭제 */
 	remove_child_process(c_thread);
-	sema_up(&c_thread->parent_t->sema_exit);
-
+	
+	
 	/* 자식 프로세스의 exit status 리턴 */
 	return c_thread->exit_status;
 
@@ -299,7 +303,6 @@ void process_exit(void)
 	{
 		file_close(curr->fdt[i]);
 	}
-
 	process_cleanup();
 }
 
@@ -844,5 +847,7 @@ struct thread *get_child_process(int pid)
 void remove_child_process(struct thread *cp) 
 {
 	list_remove(&cp->children_elem);
+	// if (cp->exec_flag == 1){
 	palloc_free_page(cp->name);
+	// }
 }
