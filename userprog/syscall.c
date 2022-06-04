@@ -153,53 +153,21 @@ bool remove(const char *file)
    return value : pid / -1 */
 int exec(const char *cmd_line)
 {
-	/* 수연 수정 */
 	/* 새롭게 할당받아 프로그램을 실행시킨다. */
 	check_address(cmd_line);
 	char *fn_copy;
-	fn_copy = palloc_get_page(PAL_ZERO);
+	fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return -1;
-	memcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
-	// printf("\n\n555555555555555\n\n");
-	int exec_result = process_exec(fn_copy); /* 형변환? */
-	if (exec_result == -1)
-	{
-		return -1; // 잘못됐을 때만 리턴
-	}
-	/* test case 결과
-		Acceptable output:
-			(exec-once) begin
-			(exec-once) I'm your father
-			(child-simple) run
-			exec-once: exit(81)
-		Differences in `diff -u' format:
-			(exec-once) begin
-			(exec-once) I'm your father
-			- (child-simple) run
-			- exec-once: exit(81)
-			+ exec-once: exit(-1)
-	*/
+	strlcpy(fn_copy, cmd_line, PGSIZE);
 
-	// int c_tid = process_create_initd(cmd_line);
-	// if (c_tid == TID_ERROR)
-	// {
-	// 	return -1; // 잘못됐을 때만 리턴
-	// }
-	// thread_exit();
-	/* test case 결과
-		Acceptable output:
-			(exec-once) begin
-			(exec-once) I'm your father
-			(child-simple) run
-			exec-once: exit(81)
-			Differences in `diff -u' format:
-			(exec-once) begin
-			(exec-once) I'm your father
-			(child-simple) run
-			- exec-once: exit(81)
-			+ child-simple: exit(81)
-	*/
+	char *save_ptr;
+	strtok_r(cmd_line, " ", &save_ptr);
+	if (process_exec(fn_copy) == -1)
+	{
+		return -1; /* exec 실패 시에만 리턴 */
+	}
+	NOT_REACHED();
 }
 
 /* 자식 프로세스가 종료 될 때까지 대기
@@ -211,7 +179,6 @@ int wait(pid_t pid)
 
 pid_t fork(const char *thread_name)
 {
-	// sema_down(&thread_current()->sema_load); /* 이거 process_exec에서 up함 */
 
 	// struct intr_frame *if_;
 

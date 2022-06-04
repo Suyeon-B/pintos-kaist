@@ -192,11 +192,9 @@ int process_exec(void *f_name)
 	char *file_name = f_name;
 	char *file_name_copy; //파싱해서 담아주기 - 파일을 담을수있
 	bool success;
-	// printf("\n\n111111111111111 %s\n\n", file_name_copy);
 
 	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
-	// printf("\n\n222222222222222 %s\n\n", file_name_copy);
-	// printf("#######filename: %s\n",file_name_copy);
+
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -207,21 +205,14 @@ int process_exec(void *f_name)
 
 	/* We first kill the current context */
 	process_cleanup();
-	// printf("\n\nprocess_cleanup 됩니다유.. %s\n\n", file_name_copy);
 
 	//파싱하기
 	int token_count = 0;
 	char *token, *last;
-	char *arg_list[65];
+	char *arg_list[128];
 	char *tmp_save = token;
-	// printf("\n\n1111111111111\n\n");
-	// printf("\n\nstrtok_r 가 문제니? %s\n\n", file_name_copy);
-	// printf("\n\nstrtok_r 가 문제라면? %s\n\n", file_name_copy);
 	
 	token = strtok_r(file_name_copy, " ", &last);
-	// printf("\n\n22222222\n\n");
-	// printf("\n\ntoken : %s\n\n", token);
-	// printf("\n\nstrtok_r 됩니다유.. %s\n\n", file_name_copy);
 	arg_list[token_count] = token;
 
 	while (token != NULL)
@@ -233,25 +224,16 @@ int process_exec(void *f_name)
 
 	/* And then load the binary */
 	success = load(arg_list[0], &_if); //해당 바이너리 파일을 메모리에 로드하기
-	// printf("\n\nload 됩니다유.. %s\n\n", file_name_copy);
 
-	/* 메모리 적재 완료 시 부모 프로세스 다시 진행 (세마포어 이용) */
-	// thread_current()->exec_flag = 1; /* load flag 세움 */
-	// thread_current()->exec_flag = 1; /* exec flag 세움 */
-	// sema_up(&thread_current()->sema_wait);
 	/* If load failed, quit. */
-	// printf("\n\n333333333333333 %s\n\n", file_name_copy);
 	palloc_free_page(file_name);
 	if (!success)
-		/* 메모리 적재 실패 시 프로세스 디스크립터(struct thread)에 메모리 적재 실패 */
-		// return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
 		thread_exit();
-	/* 메모리 적재 성공 시 프로세스 디스크립터(struct thread)에 메모리 적재 성공 */
-	// printf("\n\n444444444444444 %s\n\n", file_name_copy);
+
 	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
 	argument_stack(token_count, arg_list, &_if);
 	void **rspp = &_if.rsp;
-	// printf("\n\n555555555555555 %s\n\n", file_name_copy);
+	
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 	/* Start switched process. */
 	do_iret(&_if); // 유저 프로그램 실행
