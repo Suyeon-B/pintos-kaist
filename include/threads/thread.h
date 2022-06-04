@@ -116,14 +116,13 @@ struct thread
 	struct list sibling_list; /* 자식 리스트 */
 	struct list_elem children_elem; /* 자식 리스트 element */
 
-	int load_flag;/* 프로세스의 프로그램 메모리 적재 유무 */
+	int exec_flag;/* 프로세스의 프로그램 메모리 적재 유무 */
 	int exit_flag;/* 프로세스가 종료 유무 확인 */
 	struct semaphore sema_exit;/* exit 세마포어 */
 	struct semaphore sema_wait;/* load 세마포어 */
 	int exit_status;/* exit 호출 시 종료 status */
 
 	/* 수연 추가 */
-	// int exec_flag;
 
 	/* file descriptor */
 	struct file *fdt[64];

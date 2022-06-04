@@ -232,7 +232,7 @@ tid_t thread_create(const char *name, int priority,
 	t->next_fd = 2; 
 
 	t->parent_t = thread_current();
-	t->load_flag = 0;
+	t->exec_flag = 0;
 	t->exit_flag = 0;
 	sema_init(&t->sema_exit,0);
 	sema_init(&t->sema_wait,0);

@@ -153,17 +153,53 @@ bool remove(const char *file)
    return value : pid / -1 */
 int exec(const char *cmd_line)
 {
-	// /* 수연 수정 */
-	// /* 새롭게 할당받아 프로그램을 실행시킨다. */
-	// check_address(cmd_line);
-	// // char *fn_copy;
-	// // fn_copy = palloc_get_page(PAL_ZERO);
-	// // if (fn_copy == NULL)
-	// // 	return TID_ERROR;
-	// // strlcpy(fn_copy, cmd_line, PGSIZE);
+	/* 수연 수정 */
+	/* 새롭게 할당받아 프로그램을 실행시킨다. */
+	check_address(cmd_line);
+	char *fn_copy;
+	fn_copy = palloc_get_page(PAL_ZERO);
+	if (fn_copy == NULL)
+		return -1;
+	memcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
+	// printf("\n\n555555555555555\n\n");
+	int exec_result = process_exec(fn_copy); /* 형변환? */
+	if (exec_result == -1)
+	{
+		return -1; // 잘못됐을 때만 리턴
+	}
+	/* test case 결과
+		Acceptable output:
+			(exec-once) begin
+			(exec-once) I'm your father
+			(child-simple) run
+			exec-once: exit(81)
+		Differences in `diff -u' format:
+			(exec-once) begin
+			(exec-once) I'm your father
+			- (child-simple) run
+			- exec-once: exit(81)
+			+ exec-once: exit(-1)
+	*/
 
-	// sema_down(&thread_current()->sema_load);
-	// process_exec(cmd_line);
+	// int c_tid = process_create_initd(cmd_line);
+	// if (c_tid == TID_ERROR)
+	// {
+	// 	return -1; // 잘못됐을 때만 리턴
+	// }
+	// thread_exit();
+	/* test case 결과
+		Acceptable output:
+			(exec-once) begin
+			(exec-once) I'm your father
+			(child-simple) run
+			exec-once: exit(81)
+			Differences in `diff -u' format:
+			(exec-once) begin
+			(exec-once) I'm your father
+			(child-simple) run
+			- exec-once: exit(81)
+			+ child-simple: exit(81)
+	*/
 }
 
 /* 자식 프로세스가 종료 될 때까지 대기

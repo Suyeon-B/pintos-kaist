@@ -22,10 +22,10 @@
 #include "vm/vm.h"
 #endif
 
-static void process_cleanup(void);
-static bool load(const char *file_name, struct intr_frame *if_);
-static void initd(void *f_name);
-static void __do_fork(void *);
+// static void process_cleanup(void);
+// static bool load(const char *file_name, struct intr_frame *if_);
+// static void initd(void *f_name);
+// static void __do_fork(void *);
 
 /* General process initializer for initd and other process. */
 static void
@@ -41,7 +41,7 @@ process_init(void)
  * Notice that THIS SHOULD BE CALLED ONCE.
  * = ppt에서 process_execute() */
 tid_t process_create_initd(const char *file_name)
-{ 
+{
 	//실행파일의 이름을 가져온다. (커멘드라인???)
 	char *fn_copy;
 	tid_t tid;
@@ -61,10 +61,11 @@ tid_t process_create_initd(const char *file_name)
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(token, PRI_DEFAULT + 1, initd, fn_copy); //특정 기능을 가진 스레드 생성
-
 	// 실행하려는 파일의 이름을 스레드의 이름으로 전달한다음 실행(initd)기능을 사용하여 스레드를 생성한다.
+	
 	if (tid == TID_ERROR)
 		palloc_free_page(token);
+
 	return tid;
 }
 
@@ -165,7 +166,8 @@ __do_fork(void *aux)
 	 * TODO:       the resources of parent. */
 	/* 수연 추가 */
 	struct file *c_file = file_duplicate(parent->fdt);
-	if (!c_file){
+	if (!c_file)
+	{
 		succ = false;
 	}
 	process_init();
@@ -190,8 +192,10 @@ int process_exec(void *f_name)
 	char *file_name = f_name;
 	char *file_name_copy; //파싱해서 담아주기 - 파일을 담을수있
 	bool success;
+	// printf("\n\n111111111111111 %s\n\n", file_name_copy);
 
 	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
+	// printf("\n\n222222222222222 %s\n\n", file_name_copy);
 	// printf("#######filename: %s\n",file_name_copy);
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -203,14 +207,21 @@ int process_exec(void *f_name)
 
 	/* We first kill the current context */
 	process_cleanup();
+	// printf("\n\nprocess_cleanup 됩니다유.. %s\n\n", file_name_copy);
 
 	//파싱하기
 	int token_count = 0;
 	char *token, *last;
 	char *arg_list[65];
 	char *tmp_save = token;
-
+	// printf("\n\n1111111111111\n\n");
+	// printf("\n\nstrtok_r 가 문제니? %s\n\n", file_name_copy);
+	// printf("\n\nstrtok_r 가 문제라면? %s\n\n", file_name_copy);
+	
 	token = strtok_r(file_name_copy, " ", &last);
+	// printf("\n\n22222222\n\n");
+	// printf("\n\ntoken : %s\n\n", token);
+	// printf("\n\nstrtok_r 됩니다유.. %s\n\n", file_name_copy);
 	arg_list[token_count] = token;
 
 	while (token != NULL)
@@ -222,24 +233,26 @@ int process_exec(void *f_name)
 
 	/* And then load the binary */
 	success = load(arg_list[0], &_if); //해당 바이너리 파일을 메모리에 로드하기
+	// printf("\n\nload 됩니다유.. %s\n\n", file_name_copy);
 
 	/* 메모리 적재 완료 시 부모 프로세스 다시 진행 (세마포어 이용) */
-	// thread_current()->load_flag = 1; /* load flag 세움 */
+	// thread_current()->exec_flag = 1; /* load flag 세움 */
 	// thread_current()->exec_flag = 1; /* exec flag 세움 */
+	// sema_up(&thread_current()->sema_wait);
 	/* If load failed, quit. */
+	// printf("\n\n333333333333333 %s\n\n", file_name_copy);
 	palloc_free_page(file_name);
 	if (!success)
 		/* 메모리 적재 실패 시 프로세스 디스크립터(struct thread)에 메모리 적재 실패 */
 		// return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
 		thread_exit();
-	
 	/* 메모리 적재 성공 시 프로세스 디스크립터(struct thread)에 메모리 적재 성공 */
-
-	//유저 프로그램이 실행되기 전에 스택에 인자 저장
+	// printf("\n\n444444444444444 %s\n\n", file_name_copy);
+	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
 	argument_stack(token_count, arg_list, &_if);
 	void **rspp = &_if.rsp;
+	// printf("\n\n555555555555555 %s\n\n", file_name_copy);
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
-
 	/* Start switched process. */
 	do_iret(&_if); // 유저 프로그램 실행
 	NOT_REACHED();
@@ -264,11 +277,11 @@ int process_wait(tid_t child_tid UNUSED)
 	int child_exit_status = 0;
 
 	/* 예외 처리 발생시 -1 리턴 */
-	if (!c_thread) // If TID is invalid 
+	if (!c_thread) // If TID is invalid
 	{
 		return -1;
 	}
-	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용) 
+	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용)
 	   근데 자기 lock에 걸리면 꺼내줄 스레드가 없으니까 자식 세마 리스트로 들어감 */
 	sema_down(&c_thread->sema_wait);
 	/* c_thread가 삭제되어 오면 remove를 할 수 없으니 살려둬야한다! */
@@ -294,8 +307,11 @@ void process_exit(void)
 	{
 		file_close(curr->fdt[i]);
 	}
-	sema_up(&curr->sema_wait); /* wait하고 있을 parent를 위해 */
-	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
+	if (&curr->parent_t)
+	{
+		sema_up(&curr->sema_wait); /* wait하고 있을 parent를 위해 */
+		sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
+	}
 	process_cleanup();
 }
 
@@ -424,7 +440,6 @@ load(const char *file_name, struct intr_frame *if_)
 	// printf("토큰토크ㅡㅋ %s\n",file_name);
 	// char *fn_copy;
 	// strlcpy (fn_copy, file_name, PGSIZE);
-	// // ////////////!!!!!!!!!!!!!!!
 	// char *token, *save_ptr; //토큰, 분리되고 남은 문자열
 	// token = strtok_r(fn_copy," ",&save_ptr); // 첫번째 인자
 	// printf("no-such-file 이라고 떠야 함 : %s", file_name); /* 지워 */
@@ -837,7 +852,7 @@ struct thread *get_child_process(int pid)
 }
 
 /* child의 struct thread 를 자식 리스트에서 제거 후 메모리 해제 */
-void remove_child_process(struct thread *cp) 
+void remove_child_process(struct thread *cp)
 {
 	list_remove(&cp->children_elem);
 	palloc_free_page(cp->name);
