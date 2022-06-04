@@ -118,8 +118,8 @@ struct thread
 
 	int load_flag;/* 프로세스의 프로그램 메모리 적재 유무 */
 	int exit_flag;/* 프로세스가 종료 유무 확인 */
-	struct semaphore sema_exit;/* exit 세마포어 - type버그 나고있음!!!!!!!!!!! */
-	struct semaphore sema_load;/* load 세마포어 */
+	struct semaphore sema_exit;/* exit 세마포어 */
+	struct semaphore sema_wait;/* load 세마포어 */
 	int exit_status;/* exit 호출 시 종료 status */
 
 	/* file descriptor */

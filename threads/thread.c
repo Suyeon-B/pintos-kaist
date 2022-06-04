@@ -235,7 +235,7 @@ tid_t thread_create(const char *name, int priority,
 	t->load_flag = 0;
 	t->exit_flag = 0;
 	sema_init(&t->sema_exit,0);
-	sema_init(&t->sema_load,0);
+	sema_init(&t->sema_wait,0);
 
 	list_push_back(&t->parent_t->sibling_list, &t->children_elem);
 

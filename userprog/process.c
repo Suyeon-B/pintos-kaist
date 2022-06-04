@@ -254,30 +254,28 @@ int process_wait(tid_t child_tid UNUSED)
 {
 	// 자식 프로세스가 생성될 때까지 기다려야하고 완료되면 단순 반환
 	// 0은 모든 프로세스의 어머니입니다.
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-
+	// struct thread *curr = thread_current();
 	/* 자식 프로세스의 프로세스 디스크립터(struct thread) 검색 */
-	// struct thread *c_thread = get_child_process(child_tid);
-	// /* 예외 처리 발생시 -1 리턴 */
-	// if (!c_thread)
-	// {
-	// 	return -1;
-	// }
-	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용) */
-	// sema_down(&c_thread->parent_t->sema_exit);
-	// c_thread->status != THREAD_DYING
-	// sema_up(&c_thread->parent_t->sema_exit);
-	/* 자식 프로세스 디스크립터 삭제 */
-	// remove_child_process(c_thread);
-	/* 자식 프로세스의 exit status 리턴 */
-	// return c_thread->exit_status;
+	struct thread *c_thread = get_child_process(child_tid);
+	int child_exit_status = 0;
 
-	// for (int i = 0; i < 100000000; i++)
-	// {
-	// }
-	return -1;
+	/* 예외 처리 발생시 -1 리턴 */
+	if (!c_thread) // If TID is invalid 
+	{
+		return -1;
+	}
+	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용) 
+	   근데 자기 lock에 걸리면 꺼내줄 스레드가 없으니까 자식 세마 리스트로 들어감 */
+	sema_down(&c_thread->sema_wait);
+	/* c_thread가 삭제되어 오면 remove를 할 수 없으니 살려둬야한다! */
+	/* 자식 프로세스 디스크립터 삭제 */
+	list_remove(&c_thread->children_elem);
+	// remove_child_process(c_thread); /* allocate 여부 결정 */
+	child_exit_status = c_thread->exit_status;
+	sema_up(&c_thread->sema_exit);
+
+	/* 자식 프로세스의 exit status 리턴 */
+	return child_exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -292,10 +290,8 @@ void process_exit(void)
 	{
 		file_close(curr->fdt[i]);
 	}
-
-	// #ifdef USERPROG
-	// 	printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
-	// #endif
+	sema_up(&curr->sema_wait); /* wait하고 있을 parent를 위해 */
+	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
 	process_cleanup();
 }
 
@@ -828,14 +824,14 @@ struct thread *get_child_process(int pid)
 		struct thread *c_thread = list_entry(c_elem, struct thread, children_elem);
 		if (c_thread->tid == pid)
 		{
-			return curr;
+			return c_thread;
 		}
 		c_elem = list_next(c_elem);
 	}
 	return NULL;
 }
 
-// /* 프로세스 디스크립터를 자식 리스트에서 제거 후 메모리 해제 */
+/* 프로세스 디스크립터를 자식 리스트에서 제거 후 메모리 해제 */
 void remove_child_process(struct thread *cp)
 {
 	// struct thread *curr = thread_current();
@@ -850,5 +846,5 @@ void remove_child_process(struct thread *cp)
 	// 	}
 	// }
 	list_remove(&cp->children_elem);
-	thread_exit();
+	palloc_free_page(cp->name);
 }

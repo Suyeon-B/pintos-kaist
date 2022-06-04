@@ -152,12 +152,13 @@ bool remove(const char *file)
 /* 자식 프로세스를 생성하고 프로그램을 실행시키는 시스템 콜 */
 int exec(const char *cmd_line)
 {
+	
 }
 
 int wait(pid_t pid)
 {
 	/* 자식 프로세스가 종료 될 때까지 대기 */
-	// process_wait(pid);
+	return process_wait(pid);
 }
 
 pid_t fork(const char *thread_name)
