@@ -149,20 +149,41 @@ bool remove(const char *file)
 	return filesys_remove(file);
 }
 
-/* 자식 프로세스를 생성하고 프로그램을 실행시키는 시스템 콜 */
+/* 새롭게 프로그램을 실행시키는 시스템 콜
+   return value : pid / -1 */
 int exec(const char *cmd_line)
 {
-	
+	// /* 수연 수정 */
+	// /* 새롭게 할당받아 프로그램을 실행시킨다. */
+	// check_address(cmd_line);
+	// // char *fn_copy;
+	// // fn_copy = palloc_get_page(PAL_ZERO);
+	// // if (fn_copy == NULL)
+	// // 	return TID_ERROR;
+	// // strlcpy(fn_copy, cmd_line, PGSIZE);
+
+	// sema_down(&thread_current()->sema_load);
+	// process_exec(cmd_line);
 }
 
+/* 자식 프로세스가 종료 될 때까지 대기
+   return value : 정상종료 exit status / -1 */
 int wait(pid_t pid)
 {
-	/* 자식 프로세스가 종료 될 때까지 대기 */
 	return process_wait(pid);
 }
 
 pid_t fork(const char *thread_name)
 {
+	// sema_down(&thread_current()->sema_load); /* 이거 process_exec에서 up함 */
+
+	// struct intr_frame *if_;
+
+	// int c_tid = process_fork(thread_name, if_);
+	// if (c_tid){
+	// 	return process_exec(thread_name);
+	// }
+	// return TID_ERROR;
 }
 
 /* 사용자 프로세스가 파일에 접근하기 위한 시스템콜

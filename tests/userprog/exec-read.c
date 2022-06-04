@@ -31,7 +31,7 @@ test_main (void)
     else if (strcmp (sample, buffer)) {
         msg ("expected text:\n%s", sample);
         msg ("text actually read:\n%s", buffer);
-        fail ("expected text differs from actual");
+        fail ("expected text differs from actu al");
     } else {
       msg ("Parent success");
     }

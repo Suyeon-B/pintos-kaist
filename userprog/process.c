@@ -41,13 +41,14 @@ process_init(void)
  * Notice that THIS SHOULD BE CALLED ONCE.
  * = ppt에서 process_execute() */
 tid_t process_create_initd(const char *file_name)
-{ //실행파일의 이름을 가져온다. (커멘드라인???)
+{ 
+	//실행파일의 이름을 가져온다. (커멘드라인???)
 	char *fn_copy;
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page(0);
+	fn_copy = palloc_get_page(PAL_ZERO);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy(fn_copy, file_name, PGSIZE);
@@ -85,6 +86,7 @@ initd(void *f_name)
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
+
 	/* Clone current thread to new thread.*/
 	return thread_create(name,
 						 PRI_DEFAULT, __do_fork, thread_current());
@@ -160,8 +162,12 @@ __do_fork(void *aux)
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
-
+	 * TODO:       the resources of parent. */
+	/* 수연 추가 */
+	struct file *c_file = file_duplicate(parent->fdt);
+	if (!c_file){
+		succ = false;
+	}
 	process_init();
 
 	/* Finally, switch to the newly created process. */
@@ -183,7 +189,6 @@ int process_exec(void *f_name)
 { //프로세스 실행 - 실행하려는 바이너리 파일 이름을 가져옴
 	char *file_name = f_name;
 	char *file_name_copy; //파싱해서 담아주기 - 파일을 담을수있
-	// char *file_name_copy[48]; //48 왜???
 	bool success;
 
 	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
@@ -210,7 +215,6 @@ int process_exec(void *f_name)
 
 	while (token != NULL)
 	{
-		// printf("%d == %s\n",token_count,token);
 		token = strtok_r(NULL, " ", &last);
 		token_count++;
 		arg_list[token_count] = token;
@@ -220,14 +224,15 @@ int process_exec(void *f_name)
 	success = load(arg_list[0], &_if); //해당 바이너리 파일을 메모리에 로드하기
 
 	/* 메모리 적재 완료 시 부모 프로세스 다시 진행 (세마포어 이용) */
-
+	// thread_current()->load_flag = 1; /* load flag 세움 */
+	// thread_current()->exec_flag = 1; /* exec flag 세움 */
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
 		/* 메모리 적재 실패 시 프로세스 디스크립터(struct thread)에 메모리 적재 실패 */
+		// return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
 		thread_exit();
-	// return -1; //프로그램 종료? 할당된 모든 메모리 청크를 정리?
-
+	
 	/* 메모리 적재 성공 시 프로세스 디스크립터(struct thread)에 메모리 적재 성공 */
 
 	//유저 프로그램이 실행되기 전에 스택에 인자 저장
@@ -235,8 +240,7 @@ int process_exec(void *f_name)
 	void **rspp = &_if.rsp;
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
-	/* Start switched process.
-		생성된 프로*/
+	/* Start switched process. */
 	do_iret(&_if); // 유저 프로그램 실행
 	NOT_REACHED();
 }
@@ -423,9 +427,10 @@ load(const char *file_name, struct intr_frame *if_)
 	// // ////////////!!!!!!!!!!!!!!!
 	// char *token, *save_ptr; //토큰, 분리되고 남은 문자열
 	// token = strtok_r(fn_copy," ",&save_ptr); // 첫번째 인자
-
+	// printf("no-such-file 이라고 떠야 함 : %s", file_name); /* 지워 */
 	file = filesys_open(file_name); //프로그램 파일 오픈
 
+	// printf("load: %s: open failed?\n", file_name);
 	if (file == NULL)
 	{
 		printf("load: %s: open failed\n", file_name);
@@ -814,7 +819,7 @@ void process_close_file(int fd)
 	curr->fdt[fd] = 0;
 }
 
-/* 자식 리스트를 검색하여 프로세스 디스크립터의 주소 리턴 */
+/* 자식 리스트를 검색하여 struct thread의 주소 리턴 */
 struct thread *get_child_process(int pid)
 {
 	struct thread *curr = thread_current();
@@ -831,20 +836,9 @@ struct thread *get_child_process(int pid)
 	return NULL;
 }
 
-/* 프로세스 디스크립터를 자식 리스트에서 제거 후 메모리 해제 */
-void remove_child_process(struct thread *cp)
+/* child의 struct thread 를 자식 리스트에서 제거 후 메모리 해제 */
+void remove_child_process(struct thread *cp) 
 {
-	// struct thread *curr = thread_current();
-	// struct list_elem *c_elem = list_begin(&curr->sibling_list);
-	// while (c_elem != list_tail(&curr->sibling_list)){
-	// 	struct thread *c_thread = list_entry(c_elem,struct thread,children_elem);
-	// 	if (c_thread->tid == cp->tid){
-	// 		list_remove(&cp->children_elem);
-	// 	}
-	// 	else{
-	// 		c_elem = list_next(c_elem);
-	// 	}
-	// }
 	list_remove(&cp->children_elem);
 	palloc_free_page(cp->name);
 }
