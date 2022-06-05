@@ -231,13 +231,7 @@ tid_t thread_create(const char *name, int priority,
 	t->fdt[1] = STDOUT_FILENO; 
 	t->next_fd = 2; 
 
-	t->parent_t = thread_current();
-	t->exec_flag = 0;
-	t->exit_flag = 0;
-	sema_init(&t->sema_exit,0);
-	sema_init(&t->sema_wait,0);
-
-	list_push_back(&t->parent_t->sibling_list, &t->children_elem);
+	list_push_back(&thread_current()->children_list, &t->child_elem);
 
 	t->exit_status = 0;
 #endif
@@ -595,7 +589,11 @@ init_thread(struct thread *t, const char *name, int priority)
 	list_init(&t->donations);
 
 #ifdef USERPROG
-	list_init(&t->sibling_list);
+	list_init(&t->children_list);
+
+	sema_init(&t->sema_exit,0);
+	sema_init(&t->sema_wait,0);
+	sema_init(&t->sema_fork,0);
 #endif
 
 	/* MLFQ 자료구조 초기화 */

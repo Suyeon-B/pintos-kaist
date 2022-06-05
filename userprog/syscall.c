@@ -61,6 +61,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK: /* Clone current process. */
+		memcpy(&thread_current()->parent_if, f, sizeof(struct intr_frame));
 		f->R.rax = fork(f->R.rdi);
 		break;
 	case SYS_EXEC: /* Switch current process. */
@@ -177,16 +178,17 @@ int wait(pid_t pid)
 	return process_wait(pid);
 }
 
+/* Create new process which is the clone of
+   current process with the name THREAD_NAME.
+
+   return value : 부모 - child pid or TID_ERROR
+				  자식 - 0 */
+/* 고쳐야 할 함수 : __do_fork,  */
 pid_t fork(const char *thread_name)
 {
-
-	// struct intr_frame *if_;
-
-	// int c_tid = process_fork(thread_name, if_);
-	// if (c_tid){
-	// 	return process_exec(thread_name);
-	// }
-	// return TID_ERROR;
+	/* 부모 스레드는 자식 스레드가 복제 완료될 때 까지 리턴하면 x */
+	check_address(thread_name);
+	return process_fork(thread_name, &thread_current()->parent_if);
 }
 
 /* 사용자 프로세스가 파일에 접근하기 위한 시스템콜
@@ -205,7 +207,7 @@ int open(const char *file)
 		if (fd == -1)
 		{
 			file_close(open_file);
-		}
+		} 
 		return fd;
 	}
 }

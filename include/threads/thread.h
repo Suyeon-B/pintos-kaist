@@ -113,8 +113,8 @@ struct thread
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
 	struct thread* parent_t; /* 부모 프로세스의 디스크립터 */
-	struct list sibling_list; /* 자식 리스트 */
-	struct list_elem children_elem; /* 자식 리스트 element */
+	struct list children_list; /* 자식 리스트 */
+	struct list_elem child_elem; /* 자식 리스트 element */
 
 	int exec_flag;/* 프로세스의 프로그램 메모리 적재 유무 */
 	int exit_flag;/* 프로세스가 종료 유무 확인 */
@@ -123,6 +123,8 @@ struct thread
 	int exit_status;/* exit 호출 시 종료 status */
 
 	/* 수연 추가 */
+	struct semaphore sema_fork;
+
 
 	/* file descriptor */
 	struct file *fdt[64];
@@ -137,6 +139,7 @@ struct thread
 
 	/* Owned by thread.c. */
 	struct intr_frame tf; /* Information for switching */
+	struct intr_frame parent_if;
 	unsigned magic;		  /* Detects stack overflow. */
 };
 

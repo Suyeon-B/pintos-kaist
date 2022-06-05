@@ -87,10 +87,24 @@ initd(void *f_name)
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
-
 	/* Clone current thread to new thread.*/
-	return thread_create(name,
-						 PRI_DEFAULT, __do_fork, thread_current());
+	/* cur = 부모 프로세스(Caller)! */
+	struct thread* curr = thread_current();
+	// memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
+
+	/* 새롭게 프로세스를 하나 더 만든다. 이 자식 프로세스는 __do_fork()를 수행한다. */
+	tid_t tid = thread_create (name, curr->priority, __do_fork, curr);
+	if (tid == TID_ERROR)
+		return TID_ERROR;
+
+	/* thread_create하면서 부모 프로세스의 자식 list에 넣어주었다. */
+	struct thread *child = get_child_process(tid); 
+	
+	/* 자식이 fork를 끝낼 때까지 기다린다. */
+	// printf("자식 do fork 대기");
+	sema_down(&child->sema_fork); /* wait until child loads */
+	
+	return tid;
 }
 
 #ifndef VM
@@ -106,22 +120,39 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if(is_kernel_vaddr(va)){
+		return true;
+	}
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page(parent->pml4, va);
+	if (parent_page == NULL){
+		// printf("[fork-duplicate] failed to fetch page for user vaddr 'va'\n"); // #ifdef DEBUG
+		return false;
+	}
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	newpage = palloc_get_page(PAL_USER);
+	if (newpage == NULL){
+		// printf("[fork-duplicate] failed to palloc new page\n"); // #ifdef DEBUG
+		return false;
+	}
+
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
+		// printf("Failed to map user virtual page to given physical frame\n"); // #ifdef DEBUG
+		return false;
 	}
 	return true;
 }
@@ -138,11 +169,13 @@ __do_fork(void *aux)
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
+	/* 부모의 인터럽트 프레임(CPU context)을 복사해온다. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
+	if_.R.rax = 0; 
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -164,19 +197,25 @@ __do_fork(void *aux)
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent. */
-	/* 수연 추가 */
-	struct file *c_file = file_duplicate(parent->fdt);
-	if (!c_file)
-	{
-		succ = false;
+	current->fdt[0] = parent->fdt[0]; 
+	current->fdt[1] = parent->fdt[1];
+	for (int i=2;i<63;i++){
+		struct file *f = parent->fdt[i];
+		if (!f)
+			continue;
+		current->fdt[i] = file_duplicate(f);
 	}
-	process_init();
+	current->next_fd = parent->next_fd;
 
+	// process_init();
+	sema_up(&current->sema_fork);
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
 error:
-	thread_exit();
+	sema_up(&current->sema_fork);
+	current->exit_status = TID_ERROR;
+	return TID_ERROR;
 }
 
 /* Switch the current execution context to the f_name.
@@ -268,7 +307,7 @@ int process_wait(tid_t child_tid UNUSED)
 	sema_down(&c_thread->sema_wait);
 	/* c_thread가 삭제되어 오면 remove를 할 수 없으니 살려둬야한다! */
 	/* 자식 프로세스 디스크립터 삭제 */
-	list_remove(&c_thread->children_elem);
+	list_remove(&c_thread->child_elem);
 	// remove_child_process(c_thread); /* allocate 여부 결정 */
 	child_exit_status = c_thread->exit_status;
 	sema_up(&c_thread->sema_exit);
@@ -820,10 +859,10 @@ void process_close_file(int fd)
 struct thread *get_child_process(int pid)
 {
 	struct thread *curr = thread_current();
-	struct list_elem *c_elem = list_begin(&curr->sibling_list);
-	while (c_elem != list_tail(&curr->sibling_list))
+	struct list_elem *c_elem = list_begin(&curr->children_list);
+	while (c_elem != list_tail(&curr->children_list))
 	{
-		struct thread *c_thread = list_entry(c_elem, struct thread, children_elem);
+		struct thread *c_thread = list_entry(c_elem, struct thread, child_elem);
 		if (c_thread->tid == pid)
 		{
 			return c_thread;
@@ -836,6 +875,6 @@ struct thread *get_child_process(int pid)
 /* child의 struct thread 를 자식 리스트에서 제거 후 메모리 해제 */
 void remove_child_process(struct thread *cp)
 {
-	list_remove(&cp->children_elem);
+	list_remove(&cp->child_elem);
 	palloc_free_page(cp->name);
 }
