@@ -1,5 +1,6 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
+#define MAX_FD 64
 
 #include <stdbool.h>
 #include "threads/synch.h"

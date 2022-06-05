@@ -22,6 +22,7 @@
 #include "vm/vm.h"
 #endif
 
+#define MAX_FD 63
 // static void process_cleanup(void);
 // static bool load(const char *file_name, struct intr_frame *if_);
 // static void initd(void *f_name);
@@ -199,7 +200,7 @@ __do_fork(void *aux)
 	 * TODO:       the resources of parent. */
 	current->fdt[0] = parent->fdt[0]; 
 	current->fdt[1] = parent->fdt[1];
-	for (int i=2;i<63;i++){
+	for (int i=2;i<MAX_FD;i++){
 		struct file *f = parent->fdt[i];
 		if (!f)
 			continue;
@@ -267,7 +268,8 @@ int process_exec(void *f_name)
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
-		thread_exit();
+		return -1;
+		// thread_exit();
 
 	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
 	argument_stack(token_count, arg_list, &_if);
@@ -833,7 +835,7 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
 int process_add_file(struct file *f)
 {
 	struct thread *curr = thread_current();
-	if (curr->next_fd >= 63)
+	if (curr->next_fd >= MAX_FD)
 	{
 		return -1;
 	}
@@ -843,7 +845,7 @@ int process_add_file(struct file *f)
 }
 struct file *process_get_file(int fd)
 {
-	if (fd < 0 || fd > 63)
+	if (fd < 0 || fd > MAX_FD)
 		return NULL;
 	struct thread *curr = thread_current();
 	return curr->fdt[fd];

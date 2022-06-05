@@ -30,6 +30,7 @@ void syscall_handler(struct intr_frame *);
 #define MSR_STAR 0xc0000081			/* Segment selector msr */
 #define MSR_LSTAR 0xc0000082		/* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
+#define MAX_FD 63
 
 void syscall_init(void)
 {
@@ -196,7 +197,23 @@ pid_t fork(const char *thread_name)
 int open(const char *file)
 {
 	check_address(file);
+	// struct thread *curr = thread_current();
 	struct file *open_file = filesys_open(file);
+	// if (open_file)
+	// {
+	// 	for (int i = 2; i < MAX_FD; i++)
+	// 	{
+	// 		if (curr->fdt[i] == NULL)
+	// 		{
+	// 			curr->fdt[i] = open_file;
+	// 			curr->next_fd = i+1;
+	// 			return i;
+	// 		}
+	// 	}
+	// 	file_close(open_file);
+	// }
+	// return -1;
+
 	if (!open_file)
 	{
 		return -1;
@@ -207,7 +224,7 @@ int open(const char *file)
 		if (fd == -1)
 		{
 			file_close(open_file);
-		} 
+		}
 		return fd;
 	}
 }
