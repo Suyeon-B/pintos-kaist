@@ -107,7 +107,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 void check_address(void *addr)
 {
-	if (!is_user_vaddr(addr) ||
+	if (is_kernel_vaddr(addr) ||
 		!(pml4_get_page(thread_current()->pml4, addr)))
 	{
 		exit(-1);
@@ -197,22 +197,7 @@ pid_t fork(const char *thread_name)
 int open(const char *file)
 {
 	check_address(file);
-	// struct thread *curr = thread_current();
 	struct file *open_file = filesys_open(file);
-	// if (open_file)
-	// {
-	// 	for (int i = 2; i < MAX_FD; i++)
-	// 	{
-	// 		if (curr->fdt[i] == NULL)
-	// 		{
-	// 			curr->fdt[i] = open_file;
-	// 			curr->next_fd = i+1;
-	// 			return i;
-	// 		}
-	// 	}
-	// 	file_close(open_file);
-	// }
-	// return -1;
 
 	if (!open_file)
 	{
@@ -239,59 +224,99 @@ int filesize(int fd)
 	return file_length(curr_file);
 }
 
-int read(int fd, void *buffer, unsigned length)
+int read(int fd, void *buffer, unsigned size)
 {
+	// check_address(buffer);
+	// struct file *curr_file = process_get_file(fd);
+	// char val;
+	// int count = 0;
+
+	// unsigned char *buf = buffer; // 1바이트씩 저장하기 위해
+
+	// if (fd == 0) // STDIN_FILENO : 사용자 입력 읽기
+	// {
+	// 	for (count = 0; count < length; count++)
+	// 	{
+	// 		val = input_getc(); //키보드 입력받은 문자를 반환하는 함수
+	// 		*buf++ = val;
+	// 		if (val == '\n')
+	// 			break;
+	// 	}
+	// }
+	// else if (fd == 1) //잘못된 입력
+	// {
+	// 	return -1;
+	// }
+	// else // 파일 읽기
+	// {
+	// 	lock_acquire(&filesys_lock);
+	// 	count = file_read(curr_file, buffer, length);
+	// 	lock_release(&filesys_lock);
+	// }
+	// return count;
 	check_address(buffer);
-	struct file *curr_file = process_get_file(fd);
-	char val;
-	int count = 0;
 
-	unsigned char *buf = buffer; // 1바이트씩 저장하기 위해
+	int read_result;
+	struct thread *cur = thread_current();
+	struct file *file_fd = process_get_file(fd);
 
-	if (fd == 0) // STDIN_FILENO : 사용자 입력 읽기
-	{
-		for (count = 0; count < length; count++)
-		{
-			val = input_getc(); //키보드 입력받은 문자를 반환하는 함수
-			*buf++ = val;
-			if (val == '\n')
-				break;
+	if (fd == 0) {
+		// read_result = i;
+		*(char *)buffer = input_getc();		// 키보드로 입력 받은 문자를 반환하는 함수
+		read_result = size;
+	}
+	else {
+		if (process_get_file(fd) == NULL) {
+			return -1;
+		}
+		else {
+			lock_acquire(&filesys_lock);
+			read_result = file_read(process_get_file(fd), buffer, size);
+			lock_release(&filesys_lock);
 		}
 	}
-	else if (fd == 1) //잘못된 입력
-	{
-		return -1;
-	}
-	else // 파일 읽기
-	{
-		lock_acquire(&filesys_lock);
-		count = file_read(curr_file, buffer, length);
-		lock_release(&filesys_lock);
-	}
-	return count;
+	return read_result;
 }
 
-int write(int fd, const void *buffer, unsigned length)
+int write(int fd, const void *buffer, unsigned size)
 {
+	// check_address(buffer);
+	// struct file *curr_file = process_get_file(fd);
+	// int read_count;
+	// if (fd == 1) // STDOUT_FILENO
+	// {
+	// 	putbuf(buffer, length); //문자열을 화면에 출력해주는 함수
+	// 	read_count = length;
+	// }
+	// else if (fd == 0)
+	// {
+	// 	return -1;
+	// }
+	// else
+	// {
+	// 	lock_acquire(&filesys_lock);
+	// 	read_count = file_write(curr_file, buffer, length);
+	// 	lock_release(&filesys_lock);
+	// }
+	// return read_count;
 	check_address(buffer);
-	struct file *curr_file = process_get_file(fd);
-	int read_count;
-	if (fd == 1) // STDOUT_FILENO
-	{
-		putbuf(buffer, length); //문자열을 화면에 출력해주는 함수
-		read_count = length;
+
+	int write_result;
+	lock_acquire(&filesys_lock);
+	if (fd == 1) {
+		putbuf(buffer, size);		// 문자열을 화면에 출력하는 함수
+		write_result = size;
 	}
-	else if (fd == 0)
-	{
-		return -1;
+	else {
+		if (process_get_file(fd) != NULL) {
+			write_result = file_write(process_get_file(fd), buffer, size);
+		}
+		else {
+			write_result = -1;
+		}
 	}
-	else
-	{
-		lock_acquire(&filesys_lock);
-		read_count = file_write(curr_file, buffer, length);
-		lock_release(&filesys_lock);
-	}
-	return read_count;
+	lock_release(&filesys_lock);
+	return write_result;
 }
 
 void seek(int fd, unsigned position)
