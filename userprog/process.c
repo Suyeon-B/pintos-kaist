@@ -45,10 +45,10 @@ tid_t process_create_initd(const char *file_name)
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page(PAL_ZERO);
+	fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy(fn_copy, file_name, PGSIZE);
+	strlcpy(fn_copy, file_name, strlen(file_name) + 1);
 
 	/* 추가 - 첫번째 공백 전까지의 문자열 파싱 */
 	char *token, *save_ptr;						 //토큰, 분리되고 남은 문자열
@@ -57,9 +57,9 @@ tid_t process_create_initd(const char *file_name)
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(token, PRI_DEFAULT, initd, fn_copy); //특정 기능을 가진 스레드 생성
 	// 실행하려는 파일의 이름을 스레드의 이름으로 전달한다음 실행(initd)기능을 사용하여 스레드를 생성한다.
-	
+
 	if (tid == TID_ERROR)
-		palloc_free_page(token);
+		palloc_free_page(fn_copy);
 
 	return tid;
 }
@@ -84,21 +84,20 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
 	/* Clone current thread to new thread.*/
 	/* cur = 부모 프로세스(Caller)! */
-	struct thread* curr = thread_current();
+	struct thread *curr = thread_current();
 	// memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
 
 	/* 새롭게 프로세스를 하나 더 만든다. 이 자식 프로세스는 __do_fork()를 수행한다. */
-	tid_t tid = thread_create (name, curr->priority, __do_fork, curr);
+	tid_t tid = thread_create(name, curr->priority, __do_fork, curr);
 	if (tid == TID_ERROR)
 		return TID_ERROR;
 
 	/* thread_create하면서 부모 프로세스의 자식 list에 넣어주었다. */
-	struct thread *child = get_child_process(tid); 
-	
+	struct thread *child = get_child_process(tid);
+
 	/* 자식이 fork를 끝낼 때까지 기다린다. */
-	// printf("자식 do fork 대기");
-	sema_down(&child->sema_fork); /* wait until child loads */
-	
+	sema_down(&curr->sema_fork); /* wait until child loads */
+
 	return tid;
 }
 
@@ -115,13 +114,15 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-	if(is_kernel_vaddr(va)){
+	if (is_kernel_vaddr(va))
+	{
 		return true;
 	}
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page(parent->pml4, va);
-	if (parent_page == NULL){
+	if (parent_page == NULL)
+	{
 		// printf("[fork-duplicate] failed to fetch page for user vaddr 'va'\n"); // #ifdef DEBUG
 		return false;
 	}
@@ -129,11 +130,11 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
 	newpage = palloc_get_page(PAL_USER);
-	if (newpage == NULL){
+	if (newpage == NULL)
+	{
 		// printf("[fork-duplicate] failed to palloc new page\n"); // #ifdef DEBUG
 		return false;
 	}
-
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
@@ -170,7 +171,7 @@ __do_fork(void *aux)
 	/* 1. Read the cpu context to local stack. */
 	/* 부모의 인터럽트 프레임(CPU context)을 복사해온다. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
-	if_.R.rax = 0; 
+	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -192,25 +193,31 @@ __do_fork(void *aux)
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent. */
-	current->fdt[0] = parent->fdt[0]; 
+	current->fdt[0] = parent->fdt[0];
 	current->fdt[1] = parent->fdt[1];
-	for (int i=2;i<=MAX_FD;i++){
-		struct file *f = parent->fdt[i];
-		if (!f){
-			current->fdt[i] = 0;
+
+	int cnt = 2;
+	while (cnt <= MAX_FD)
+	{
+		if (parent->fdt[cnt])
+		{
+			current->fdt[cnt] = file_duplicate(parent->fdt[cnt]);
 		}
-		else{
-			current->fdt[i] = file_duplicate(f);
+		else
+		{
+			current->fdt[cnt] = 0;
 		}
+		cnt++;
 	}
 	current->next_fd = parent->next_fd;
 
-	sema_up(&current->sema_fork);
+	sema_up(&parent->sema_fork);
+	process_init();
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
 error:
-	sema_up(&current->sema_fork);
+	sema_up(&parent->sema_fork);
 	// current->exit_status = TID_ERROR;
 	// return TID_ERROR;
 	exit(TID_ERROR);
@@ -248,7 +255,7 @@ int process_exec(void *f_name)
 	char *token, *last;
 	char *arg_list[128];
 	char *tmp_save = token;
-	
+
 	token = strtok_r(file_name_copy, " ", &last);
 	arg_list[token_count] = token;
 
@@ -322,18 +329,20 @@ void process_exit(void)
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	if (curr->running_file)
-    	file_close(curr->running_file);
+		file_close(curr->running_file);
 
 	int cnt = 2;
-	while (cnt <= MAX_FD){ /* <= curr->next_fd */
-		if (curr->fdt[cnt]){
+	while (cnt <= MAX_FD)
+	{ /* <= curr->next_fd */
+		if (curr->fdt[cnt])
+		{
 			file_close(curr->fdt[cnt]);
 			curr->fdt[cnt] = 0;
 		}
 		cnt++;
 	}
-	
-	sema_up(&curr->sema_wait); /* wait하고 있을 parent를 위해 */
+
+	sema_up(&curr->sema_wait);	 /* wait하고 있을 parent를 위해 */
 	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
 
 	process_cleanup();
@@ -460,17 +469,9 @@ load(const char *file_name, struct intr_frame *if_)
 		goto done;
 	process_activate(thread_current()); //레지스터 값을 실행중인 스레드의 페이지 테이블 주소로 변경
 
-	// /* Open executable file. */
-	// printf("토큰토크ㅡㅋ %s\n",file_name);
-	// char *fn_copy;
-	// strlcpy (fn_copy, file_name, PGSIZE);
-	// char *token, *save_ptr; //토큰, 분리되고 남은 문자열
-	// token = strtok_r(fn_copy," ",&save_ptr); // 첫번째 인자
-	// printf("no-such-file 이라고 떠야 함 : %s", file_name); /* 지워 */
-	
+	/* Open executable file. */
 	file = filesys_open(file_name); //프로그램 파일 오픈
 
-	// printf("load: %s: open failed?\n", file_name);
 	if (file == NULL)
 	{
 		printf("load: %s: open failed\n", file_name);
@@ -561,8 +562,8 @@ load(const char *file_name, struct intr_frame *if_)
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	success = true;
-	t->running_file = file;
-  	file_deny_write(file);
+	t->running_file = file; /* 위치 수상함 */
+	file_deny_write(file);
 
 done:
 	/* We arrive here whether the load is successful or not. */
@@ -842,11 +843,13 @@ int process_add_file(struct file *f)
 {
 	struct thread *curr = thread_current();
 
-	for (int i=2; i<=MAX_FD;i++){
-		if(curr->fdt[i] == 0){
+	for (int i = 2; i <= MAX_FD; i++)
+	{
+		if (curr->fdt[i] == 0)
+		{
 			curr->fdt[i] = f;
 			// if (i >= curr->next_fd){
-			curr->next_fd = i+1;
+			curr->next_fd = i + 1;
 			// }
 			return i;
 		}
@@ -865,9 +868,10 @@ void process_close_file(int fd)
 {
 	if (fd < 2 || fd > MAX_FD)
 		return NULL;
-	
+
 	struct file *f = process_get_file(fd);
-	if (f){
+	if (f)
+	{
 		file_close(f);
 		thread_current()->fdt[fd] = 0;
 	}
