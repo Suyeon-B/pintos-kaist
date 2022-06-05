@@ -315,10 +315,7 @@ unsigned tell(int fd)
 
 void close(int fd)
 {
-	struct file *curr_file = process_get_file(fd);
-	struct thread *curr_thread = thread_current();
-	curr_thread->fdt[fd] = 0;
-	file_close(curr_file);
+	process_close_file(fd);
 }
 
 int dup2(int oldfd, int newfd)

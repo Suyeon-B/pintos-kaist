@@ -327,13 +327,15 @@ void process_exit(void)
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	for (int i = 2; i < curr->next_fd; i++)
 	{
-		file_close(curr->fdt[i]);
+		if (curr->fdt[i] != 0){
+			process_close_file(i);
+		}
 	}
-	if (&curr->parent_t)
-	{
-		sema_up(&curr->sema_wait); /* wait하고 있을 parent를 위해 */
-		sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
-	}
+	file_close(curr->running_file);
+	
+	sema_up(&curr->sema_wait); /* wait하고 있을 parent를 위해 */
+	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
+
 	process_cleanup();
 }
 
@@ -478,8 +480,8 @@ load(const char *file_name, struct intr_frame *if_)
 	/* Read and verify executable header.
 		ELF파일의 헤더 정보를 읽어와 저장
 	*/
-	// t->running_file = file;
-	// file_deny_write(file);
+	t->running_file = file;
+	file_deny_write(file);
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
 		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
@@ -562,7 +564,7 @@ load(const char *file_name, struct intr_frame *if_)
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close(file);
+	// file_close(file);
 	return success;
 }
 
@@ -838,7 +840,7 @@ int process_add_file(struct file *f)
 {
 	struct thread *curr = thread_current();
 
-	for (int i=2; i<=MAX_FD+1;i++){
+	for (int i=2; i<=MAX_FD;i++){
 		// printf("!!!!!!주소 [%d] : %d \n",i,curr->fdt[i]);
 		if(curr->fdt[i] == 0){
 			curr->fdt[i] = f;
@@ -860,9 +862,14 @@ struct file *process_get_file(int fd)
 
 void process_close_file(int fd)
 {
-	struct thread *curr = thread_current();
-	file_close(curr->fdt[fd]);
-	curr->fdt[fd] = 0;
+	if (fd < 2 || fd > MAX_FD)
+		return;
+	
+	struct file *f = process_get_file(fd);
+	if (f){
+		file_close(f);
+		thread_current()->fdt[fd] = 0;
+	}
 }
 
 /* 자식 리스트를 검색하여 struct thread의 주소 리턴 */
