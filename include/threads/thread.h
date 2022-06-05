@@ -109,7 +109,7 @@ struct thread
 	int recent_cpu;
 	struct list_elem allelem; /* 모든 thread의 recent_cpu와 priority값 재계산하기 위함 */
 	
-#ifdef USERPROG
+// #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
 	struct thread* parent_t; /* 부모 프로세스의 디스크립터 */
@@ -120,18 +120,16 @@ struct thread
 	int exit_flag;/* 프로세스가 종료 유무 확인 */
 	struct semaphore sema_exit;/* exit 세마포어 */
 	struct semaphore sema_wait;/* load 세마포어 */
+	struct semaphore sema_fork; 
 	int exit_status;/* exit 호출 시 종료 status */
-
-	/* 수연 추가 */
-	struct semaphore sema_fork;
-
 
 	/* file descriptor */
 	struct file *fdt[64];
 	int next_fd;
+	struct file *running_file;
 
 
-#endif
+// #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;

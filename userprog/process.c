@@ -297,7 +297,6 @@ int process_wait(tid_t child_tid UNUSED)
 	// struct thread *curr = thread_current();
 	/* 자식 프로세스의 프로세스 디스크립터(struct thread) 검색 */
 	struct thread *c_thread = get_child_process(child_tid);
-	int child_exit_status = 0;
 
 	/* 예외 처리 발생시 -1 리턴 */
 	if (!c_thread) // If TID is invalid
@@ -308,10 +307,10 @@ int process_wait(tid_t child_tid UNUSED)
 	   근데 자기 lock에 걸리면 꺼내줄 스레드가 없으니까 자식 세마 리스트로 들어감 */
 	sema_down(&c_thread->sema_wait);
 	/* c_thread가 삭제되어 오면 remove를 할 수 없으니 살려둬야한다! */
+	int child_exit_status = c_thread->exit_status;
 	/* 자식 프로세스 디스크립터 삭제 */
 	list_remove(&c_thread->child_elem);
 	// remove_child_process(c_thread); /* allocate 여부 결정 */
-	child_exit_status = c_thread->exit_status;
 	sema_up(&c_thread->sema_exit);
 
 	/* 자식 프로세스의 exit status 리턴 */
@@ -457,7 +456,7 @@ load(const char *file_name, struct intr_frame *if_)
 	t->pml4 = pml4_create(); //유저 프로세스의 페이지 테이블 생성
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate(thread_current()); //레지서터 값을 실행중인 스레드의 페이지 테이블 주소로 변경
+	process_activate(thread_current()); //레지스터 값을 실행중인 스레드의 페이지 테이블 주소로 변경
 
 	// /* Open executable file. */
 	// printf("토큰토크ㅡㅋ %s\n",file_name);
@@ -466,6 +465,7 @@ load(const char *file_name, struct intr_frame *if_)
 	// char *token, *save_ptr; //토큰, 분리되고 남은 문자열
 	// token = strtok_r(fn_copy," ",&save_ptr); // 첫번째 인자
 	// printf("no-such-file 이라고 떠야 함 : %s", file_name); /* 지워 */
+	
 	file = filesys_open(file_name); //프로그램 파일 오픈
 
 	// printf("load: %s: open failed?\n", file_name);
@@ -478,6 +478,8 @@ load(const char *file_name, struct intr_frame *if_)
 	/* Read and verify executable header.
 		ELF파일의 헤더 정보를 읽어와 저장
 	*/
+	// t->running_file = file;
+	// file_deny_write(file);
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
 		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
@@ -835,13 +837,18 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
 int process_add_file(struct file *f)
 {
 	struct thread *curr = thread_current();
-	if (curr->next_fd >= MAX_FD)
-	{
-		return -1;
+
+	for (int i=2; i<=MAX_FD+1;i++){
+		// printf("!!!!!!주소 [%d] : %d \n",i,curr->fdt[i]);
+		if(curr->fdt[i] == 0){
+			curr->fdt[i] = f;
+			if (i >= curr->next_fd){
+				curr->next_fd = i+1;
+			}
+			return i;
+		}
 	}
-	curr->fdt[curr->next_fd] = f;
-	curr->next_fd++;
-	return curr->next_fd - 1;
+	return -1;
 }
 struct file *process_get_file(int fd)
 {
@@ -850,6 +857,7 @@ struct file *process_get_file(int fd)
 	struct thread *curr = thread_current();
 	return curr->fdt[fd];
 }
+
 void process_close_file(int fd)
 {
 	struct thread *curr = thread_current();
