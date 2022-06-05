@@ -23,10 +23,6 @@
 #endif
 
 #define MAX_FD 63
-// static void process_cleanup(void);
-// static bool load(const char *file_name, struct intr_frame *if_);
-// static void initd(void *f_name);
-// static void __do_fork(void *);
 
 /* General process initializer for initd and other process. */
 static void
@@ -53,15 +49,13 @@ tid_t process_create_initd(const char *file_name)
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy(fn_copy, file_name, PGSIZE);
-	// printf("!!!!!!!! %s !!!!!\n",fn_copy);
-	// // /* 추가 - 첫번째 공백 전까지의 문자열 파싱 */
+
+	/* 추가 - 첫번째 공백 전까지의 문자열 파싱 */
 	char *token, *save_ptr;						 //토큰, 분리되고 남은 문자열
 	token = strtok_r(file_name, " ", &save_ptr); // 첫번째 인자
 
-	// printf("!!!!!!!! %s !!!!!\n",token);
-
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create(token, PRI_DEFAULT + 1, initd, fn_copy); //특정 기능을 가진 스레드 생성
+	tid = thread_create(token, PRI_DEFAULT, initd, fn_copy); //특정 기능을 가진 스레드 생성
 	// 실행하려는 파일의 이름을 스레드의 이름으로 전달한다음 실행(initd)기능을 사용하여 스레드를 생성한다.
 	
 	if (tid == TID_ERROR)
@@ -200,23 +194,26 @@ __do_fork(void *aux)
 	 * TODO:       the resources of parent. */
 	current->fdt[0] = parent->fdt[0]; 
 	current->fdt[1] = parent->fdt[1];
-	for (int i=2;i<MAX_FD;i++){
+	for (int i=2;i<=MAX_FD;i++){
 		struct file *f = parent->fdt[i];
-		if (!f)
-			continue;
-		current->fdt[i] = file_duplicate(f);
+		if (!f){
+			current->fdt[i] = 0;
+		}
+		else{
+			current->fdt[i] = file_duplicate(f);
+		}
 	}
 	current->next_fd = parent->next_fd;
 
-	// process_init();
 	sema_up(&current->sema_fork);
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
 error:
 	sema_up(&current->sema_fork);
-	current->exit_status = TID_ERROR;
-	return TID_ERROR;
+	// current->exit_status = TID_ERROR;
+	// return TID_ERROR;
+	exit(TID_ERROR);
 }
 
 /* Switch the current execution context to the f_name.
@@ -269,13 +266,11 @@ int process_exec(void *f_name)
 	palloc_free_page(file_name);
 	if (!success)
 		return -1;
-		// thread_exit();
 
 	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
 	argument_stack(token_count, arg_list, &_if);
 	void **rspp = &_if.rsp;
 
-	
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 	/* Start switched process. */
 	do_iret(&_if); // 유저 프로그램 실행
@@ -326,13 +321,17 @@ void process_exit(void)
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	for (int i = 2; i < curr->next_fd; i++)
-	{
-		if (curr->fdt[i] != 0){
-			process_close_file(i);
+	if (curr->running_file)
+    	file_close(curr->running_file);
+
+	int cnt = 2;
+	while (cnt <= MAX_FD){ /* <= curr->next_fd */
+		if (curr->fdt[cnt]){
+			file_close(curr->fdt[cnt]);
+			curr->fdt[cnt] = 0;
 		}
+		cnt++;
 	}
-	file_close(curr->running_file);
 	
 	sema_up(&curr->sema_wait); /* wait하고 있을 parent를 위해 */
 	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
@@ -481,8 +480,8 @@ load(const char *file_name, struct intr_frame *if_)
 	/* Read and verify executable header.
 		ELF파일의 헤더 정보를 읽어와 저장
 	*/
-	t->running_file = file;
-	file_deny_write(file);
+	// t->running_file = file;
+	// file_deny_write(file);
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
 		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
@@ -562,6 +561,8 @@ load(const char *file_name, struct intr_frame *if_)
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	success = true;
+	t->running_file = file;
+  	file_deny_write(file);
 
 done:
 	/* We arrive here whether the load is successful or not. */
@@ -842,12 +843,11 @@ int process_add_file(struct file *f)
 	struct thread *curr = thread_current();
 
 	for (int i=2; i<=MAX_FD;i++){
-		// printf("!!!!!!주소 [%d] : %d \n",i,curr->fdt[i]);
 		if(curr->fdt[i] == 0){
 			curr->fdt[i] = f;
-			if (i >= curr->next_fd){
-				curr->next_fd = i+1;
-			}
+			// if (i >= curr->next_fd){
+			curr->next_fd = i+1;
+			// }
 			return i;
 		}
 	}
@@ -864,7 +864,7 @@ struct file *process_get_file(int fd)
 void process_close_file(int fd)
 {
 	if (fd < 2 || fd > MAX_FD)
-		return;
+		return NULL;
 	
 	struct file *f = process_get_file(fd);
 	if (f){
@@ -888,11 +888,4 @@ struct thread *get_child_process(int pid)
 		c_elem = list_next(c_elem);
 	}
 	return NULL;
-}
-
-/* child의 struct thread 를 자식 리스트에서 제거 후 메모리 해제 */
-void remove_child_process(struct thread *cp)
-{
-	list_remove(&cp->child_elem);
-	palloc_free_page(cp->name);
 }

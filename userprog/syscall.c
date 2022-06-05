@@ -63,31 +63,31 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_FORK: /* Clone current process. */
 		memcpy(&thread_current()->parent_if, f, sizeof(struct intr_frame));
-		f->R.rax = fork(f->R.rdi);
+		f->R.rax = (uint64_t)fork(f->R.rdi);
 		break;
 	case SYS_EXEC: /* Switch current process. */
-		f->R.rax = exec(f->R.rdi);
+		exec(f->R.rdi);
 		break;
 	case SYS_WAIT: /* Wait for a child process to die. */
-		f->R.rax = wait(f->R.rdi);
+		f->R.rax = (uint64_t)wait(f->R.rdi);
 		break;
 	case SYS_CREATE: /* Create a file. */
-		f->R.rax = create(f->R.rdi, f->R.rsi);
+		f->R.rax = (uint64_t)create(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_REMOVE: /* Delete a file. */
-		f->R.rax = remove(f->R.rdi);
+		f->R.rax = (uint64_t)remove(f->R.rdi);
 		break;
 	case SYS_OPEN: /* Open a file. */
-		f->R.rax = open(f->R.rdi);
+		f->R.rax = (uint64_t)open(f->R.rdi);
 		break;
 	case SYS_FILESIZE: /* Obtain a file's size. */
-		f->R.rax = filesize(f->R.rdi);
+		f->R.rax = (uint64_t)filesize(f->R.rdi);
 		break;
 	case SYS_READ: /* Read from a file. */
-		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+		f->R.rax = (uint64_t)read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE: /* Write to a file. */
-		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
+		f->R.rax = (uint64_t)write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK: /* Change position in a file. */
 		seek(f->R.rdi, f->R.rsi);
@@ -99,7 +99,8 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		close(f->R.rdi);
 		break;
 	default:
-		thread_exit();
+		exit(-1);
+		break;
 	}
 }
 
@@ -158,15 +159,18 @@ int exec(const char *cmd_line)
 	/* 새롭게 할당받아 프로그램을 실행시킨다. */
 	check_address(cmd_line);
 	char *fn_copy;
-	fn_copy = palloc_get_page(0);
-	if (fn_copy == NULL)
+	fn_copy = palloc_get_page(PAL_ZERO);
+	if (fn_copy == NULL){
+		exit(-1);
 		return -1;
-	strlcpy(fn_copy, cmd_line, PGSIZE);
+	}
+	strlcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
 
 	char *save_ptr;
 	strtok_r(cmd_line, " ", &save_ptr);
 	if (process_exec(fn_copy) == -1)
 	{
+		exit(-1);
 		return -1; /* exec 실패 시에만 리턴 */
 	}
 	NOT_REACHED();
@@ -226,97 +230,53 @@ int filesize(int fd)
 
 int read(int fd, void *buffer, unsigned size)
 {
-	// check_address(buffer);
-	// struct file *curr_file = process_get_file(fd);
-	// char val;
-	// int count = 0;
-
-	// unsigned char *buf = buffer; // 1바이트씩 저장하기 위해
-
-	// if (fd == 0) // STDIN_FILENO : 사용자 입력 읽기
-	// {
-	// 	for (count = 0; count < length; count++)
-	// 	{
-	// 		val = input_getc(); //키보드 입력받은 문자를 반환하는 함수
-	// 		*buf++ = val;
-	// 		if (val == '\n')
-	// 			break;
-	// 	}
-	// }
-	// else if (fd == 1) //잘못된 입력
-	// {
-	// 	return -1;
-	// }
-	// else // 파일 읽기
-	// {
-	// 	lock_acquire(&filesys_lock);
-	// 	count = file_read(curr_file, buffer, length);
-	// 	lock_release(&filesys_lock);
-	// }
-	// return count;
 	check_address(buffer);
-
-	int read_result;
-	struct thread *cur = thread_current();
-	struct file *file_fd = process_get_file(fd);
-
-	if (fd == 0) {
-		// read_result = i;
-		*(char *)buffer = input_getc();		// 키보드로 입력 받은 문자를 반환하는 함수
-		read_result = size;
+	if (fd == 1)
+	{
+		return -1;
 	}
-	else {
-		if (process_get_file(fd) == NULL) {
-			return -1;
-		}
-		else {
-			lock_acquire(&filesys_lock);
-			read_result = file_read(process_get_file(fd), buffer, size);
-			lock_release(&filesys_lock);
-		}
+
+	if (fd == 0)
+	{
+		lock_acquire(&filesys_lock);
+		int byte = input_getc();
+		lock_release(&filesys_lock);
+		return byte;
 	}
-	return read_result;
+	struct file *file = thread_current()->fdt[fd];
+	if (file)
+	{
+		lock_acquire(&filesys_lock);
+		int read_byte = file_read(file, buffer, size);
+		lock_release(&filesys_lock);
+		return read_byte;
+	}
+	return -1;
 }
 
 int write(int fd, const void *buffer, unsigned size)
 {
-	// check_address(buffer);
-	// struct file *curr_file = process_get_file(fd);
-	// int read_count;
-	// if (fd == 1) // STDOUT_FILENO
-	// {
-	// 	putbuf(buffer, length); //문자열을 화면에 출력해주는 함수
-	// 	read_count = length;
-	// }
-	// else if (fd == 0)
-	// {
-	// 	return -1;
-	// }
-	// else
-	// {
-	// 	lock_acquire(&filesys_lock);
-	// 	read_count = file_write(curr_file, buffer, length);
-	// 	lock_release(&filesys_lock);
-	// }
-	// return read_count;
 	check_address(buffer);
 
-	int write_result;
-	lock_acquire(&filesys_lock);
-	if (fd == 1) {
-		putbuf(buffer, size);		// 문자열을 화면에 출력하는 함수
-		write_result = size;
+	if (fd == 0) // STDIN일때 -1
+		return -1;
+
+	if (fd == 1)
+	{
+		lock_acquire(&filesys_lock);
+		putbuf(buffer, size);
+		lock_release(&filesys_lock);
+		return size;
 	}
-	else {
-		if (process_get_file(fd) != NULL) {
-			write_result = file_write(process_get_file(fd), buffer, size);
-		}
-		else {
-			write_result = -1;
-		}
+
+	struct file *file = thread_current()->fdt[fd];
+	if (file)
+	{
+		lock_acquire(&filesys_lock);
+		int write_byte = file_write(file, buffer, size);
+		lock_release(&filesys_lock);
+		return write_byte;
 	}
-	lock_release(&filesys_lock);
-	return write_result;
 }
 
 void seek(int fd, unsigned position)
