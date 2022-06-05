@@ -299,7 +299,7 @@ int process_wait(tid_t child_tid UNUSED)
 	struct thread *c_thread = get_child_process(child_tid);
 
 	/* 예외 처리 발생시 -1 리턴 */
-	if (!c_thread) // If TID is invalid
+	if (c_thread == NULL) // If TID is invalid
 	{
 		return -1;
 	}
