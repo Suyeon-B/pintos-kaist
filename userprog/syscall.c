@@ -157,10 +157,11 @@ int exec(const char *cmd_line)
 {
 	/* 새롭게 할당받아 프로그램을 실행시킨다. */
 	check_address(cmd_line);
-	char *fn_copy = palloc_get_page(PAL_ZERO);
+	char *fn_copy;
+	fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return -1;
-	strlcpy(fn_copy, cmd_line, strlen(cmd_line)+1);
+	strlcpy(fn_copy, cmd_line, PGSIZE);
 
 	char *save_ptr;
 	strtok_r(cmd_line, " ", &save_ptr);
@@ -225,36 +226,97 @@ int filesize(int fd)
 
 int read(int fd, void *buffer, unsigned size)
 {
+	// check_address(buffer);
+	// struct file *curr_file = process_get_file(fd);
+	// char val;
+	// int count = 0;
+
+	// unsigned char *buf = buffer; // 1바이트씩 저장하기 위해
+
+	// if (fd == 0) // STDIN_FILENO : 사용자 입력 읽기
+	// {
+	// 	for (count = 0; count < length; count++)
+	// 	{
+	// 		val = input_getc(); //키보드 입력받은 문자를 반환하는 함수
+	// 		*buf++ = val;
+	// 		if (val == '\n')
+	// 			break;
+	// 	}
+	// }
+	// else if (fd == 1) //잘못된 입력
+	// {
+	// 	return -1;
+	// }
+	// else // 파일 읽기
+	// {
+	// 	lock_acquire(&filesys_lock);
+	// 	count = file_read(curr_file, buffer, length);
+	// 	lock_release(&filesys_lock);
+	// }
+	// return count;
 	check_address(buffer);
+
+	int read_result;
+	struct thread *cur = thread_current();
+	struct file *file_fd = process_get_file(fd);
+
 	if (fd == 0) {
-		int byte = input_getc();
-		return byte;
+		// read_result = i;
+		*(char *)buffer = input_getc();		// 키보드로 입력 받은 문자를 반환하는 함수
+		read_result = size;
 	}
-	struct file *file = thread_current()->fdt[fd];
-	if (file) {
-		lock_acquire(&filesys_lock);
-		int read_byte = file_read(file, buffer, size);
-		lock_release(&filesys_lock);
-		return read_byte;
+	else {
+		if (process_get_file(fd) == NULL) {
+			return -1;
+		}
+		else {
+			lock_acquire(&filesys_lock);
+			read_result = file_read(process_get_file(fd), buffer, size);
+			lock_release(&filesys_lock);
+		}
 	}
-	return -1;
+	return read_result;
 }
 
 int write(int fd, const void *buffer, unsigned size)
 {
+	// check_address(buffer);
+	// struct file *curr_file = process_get_file(fd);
+	// int read_count;
+	// if (fd == 1) // STDOUT_FILENO
+	// {
+	// 	putbuf(buffer, length); //문자열을 화면에 출력해주는 함수
+	// 	read_count = length;
+	// }
+	// else if (fd == 0)
+	// {
+	// 	return -1;
+	// }
+	// else
+	// {
+	// 	lock_acquire(&filesys_lock);
+	// 	read_count = file_write(curr_file, buffer, length);
+	// 	lock_release(&filesys_lock);
+	// }
+	// return read_count;
 	check_address(buffer);
-	if (fd == 1) {
-		putbuf(buffer, size);
-		return size;
-	}
 
-	struct file *file = thread_current()->fdt[fd];
-	if (file) {
-		lock_acquire(&filesys_lock);
-		int write_byte = file_write(file, buffer, size);
-		lock_release(&filesys_lock);
-		return write_byte;
+	int write_result;
+	lock_acquire(&filesys_lock);
+	if (fd == 1) {
+		putbuf(buffer, size);		// 문자열을 화면에 출력하는 함수
+		write_result = size;
 	}
+	else {
+		if (process_get_file(fd) != NULL) {
+			write_result = file_write(process_get_file(fd), buffer, size);
+		}
+		else {
+			write_result = -1;
+		}
+	}
+	lock_release(&filesys_lock);
+	return write_result;
 }
 
 void seek(int fd, unsigned position)

@@ -274,6 +274,7 @@ int process_exec(void *f_name)
 	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
 	argument_stack(token_count, arg_list, &_if);
 	void **rspp = &_if.rsp;
+
 	
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 	/* Start switched process. */
@@ -877,7 +878,7 @@ struct thread *get_child_process(int pid)
 {
 	struct thread *curr = thread_current();
 	struct list_elem *c_elem = list_begin(&curr->children_list);
-	while (c_elem != list_tail(&curr->children_list))
+	while (c_elem != list_end(&curr->children_list))
 	{
 		struct thread *c_thread = list_entry(c_elem, struct thread, child_elem);
 		if (c_thread->tid == pid)
