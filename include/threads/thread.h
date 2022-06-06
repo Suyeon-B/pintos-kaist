@@ -29,6 +29,11 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
 
+/* ------------ PROJECT 2 ------------ */
+#define FDT_PAGES 3										/* pages to allocate for file descriptor tables (thread_create, process_exit) */
+#define FD_LIMIT FDT_PAGES *(1 << 9) /* limit fd_idx */ /* 왜 2^9일까? */
+/* ----------------------------------- */
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -93,12 +98,12 @@ struct thread
 	enum thread_status status; /* Thread state. */
 	char name[16];			   /* Name (for debugging purposes). */
 	int priority;			   /* Priority. */
-	int64_t time_to_wakeup;	   /* Time to wake up (for sleeping thread) */
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
 
-	/* priority scheduling */
+	/* --- PROJECT 1 : priority scheduling --------------------- */
+	int64_t time_to_wakeup;			/* Time to wake up (for sleeping thread) */
 	int init_priority;				/* donation 이후 우선순위를 초기화하기 위해 초기값 저장 */
 	struct lock *wait_on_lock;		/* 해당 스레드가 대기 하고 있는 lock자료구조의 주소를 저장 */
 	struct list donations;			/* multiple donation 을 고려하기 위해 사용 */
@@ -108,36 +113,30 @@ struct thread
 	int nice; /* for aging */
 	int recent_cpu;
 	struct list_elem allelem; /* 모든 thread의 recent_cpu와 priority값 재계산하기 위함 */
-	
-// #ifdef USERPROG
-	/* Owned by userprog/process.c. */
-	uint64_t *pml4; /* Page map level 4 */
-	struct thread* parent_t; /* 부모 프로세스의 디스크립터 */
-	struct list children_list; /* 자식 리스트 */
+							  /* ---------------------------------------------------------- */
+
+/* --- PROJECT 2 : system call ------------------------------ */
+#ifdef USERPROG
+	int exit_status;			 /* exit 호출 시 종료 status */
+	struct intr_frame parent_if; /* 부모의 interrupt frame - fork */
+	struct list children_list;	 /* 자식 리스트 */
 	struct list_elem child_elem; /* 자식 리스트 element */
-
-	int exec_flag;/* 프로세스의 프로그램 메모리 적재 유무 */
-	int exit_flag;/* 프로세스가 종료 유무 확인 */
-	struct semaphore sema_exit;/* exit 세마포어 */
-	struct semaphore sema_wait;/* load 세마포어 */
-	struct semaphore sema_fork; 
-	int exit_status;/* exit 호출 시 종료 status */
-
-	/* file descriptor */
-	struct file *fdt[64];
-	int next_fd;
+	struct semaphore sema_exit;	 /* exit 세마포어 */
+	struct semaphore sema_wait;	 /* wait 세마포어 */
+	struct semaphore sema_fork;	 /* fork 세마포어 */
+								 /* file descriptor */
+								 // struct file **fdt;
+	struct file **fdt;
+	int next_fd; /* fd idx */
 	struct file *running_file;
-
-
-// #endif
+	uint64_t *pml4; /* Page map level 4 */
+/* ---------------------------------------------------------- */
+#endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 #endif
-
-	/* Owned by thread.c. */
 	struct intr_frame tf; /* Information for switching */
-	struct intr_frame parent_if;
 	unsigned magic;		  /* Detects stack overflow. */
 };
 
@@ -192,4 +191,8 @@ void mlfqs_load_avg(void);
 void mlfqs_increment(void);
 void mlfqs_recalc_priority(void);
 void mlfqs_recalc_recent_cpu(void);
+
+/* --- PROJECT 2 : system call ------------------------------ */
+struct thread *get_child_by_tid(tid_t tid);
+/* ---------------------------------------------------------- */
 #endif /* threads/thread.h */

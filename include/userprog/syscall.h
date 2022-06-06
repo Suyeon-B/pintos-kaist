@@ -1,33 +1,29 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
-#define MAX_FD 64
-
+#include "threads/thread.h"
 #include <stdbool.h>
-#include "threads/synch.h"
+void syscall_init(void);
 
-void syscall_init (void);
-void check_address(void *addr);
+/* --- PROJECT 2 : system call ------------------------------ */
+struct lock file_lock; /* proventing race condition against  */
+void syscall_entry(void);
+void syscall_handler(struct intr_frame *);
 
-/* Projects 2 and later. */
-struct lock filesys_lock;
-
-typedef int pid_t;
-
-void halt (void);
-void exit (int status);
-pid_t fork (const char *thread_name);
-int exec (const char *file);
-int wait (pid_t);
-bool create (const char *file, unsigned initial_size);
-bool remove (const char *file);
-int open (const char *file);
-int filesize (int fd);
-int read (int fd, void *buffer, unsigned length);
-int write (int fd, const void *buffer, unsigned length);
-void seek (int fd, unsigned position);
-unsigned tell (int fd);
-void close (int fd);
-
-int dup2(int oldfd, int newfd);
+void check_address(const uint64_t *addr);
+void halt(void);
+void exit(int status);
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+int exec(const char *cmd_line);
+tid_t fork(const char *thread_name, struct intr_frame *f);
+int open(const char *file);
+int filesize(int fd);
+int read(int fd, void *buffer, unsigned size);
+int write(int fd, const void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+void close(int fd);
+int add_file_to_fdt(struct file *file);
+/* ---------------------------------------------------------- */
 
 #endif /* userprog/syscall.h */

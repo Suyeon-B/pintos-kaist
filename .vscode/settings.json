@@ -1,9 +1,6 @@
 {
   "files.associations": {
     "thread.h": "c",
-    "*.inc": "c",
-    "syscall.h": "c",
-    "file.h": "c",
-    "vm.h": "c"
+    "stdbool.h": "c"
   }
 }

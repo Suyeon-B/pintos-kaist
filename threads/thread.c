@@ -8,9 +8,8 @@
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
-#include "threads/synch.h" /* 헤더 선언 부분 .h랑 같으면 빼도 되나 확인해보기 */
+#include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "threads/fixed_point.h"
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -210,7 +209,20 @@ tid_t thread_create(const char *name, int priority,
 
 	/* Initialize thread. */
 	init_thread(t, name, priority);
-	tid = t->tid = allocate_tid();
+	// #ifdef USERPROG
+	list_push_back(&thread_current()->children_list, &t->child_elem);
+
+	/* file descriptor 관련 자료구조 초기화 */
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if (t->fdt == NULL)
+	{
+		return TID_ERROR;
+	}
+	t->next_fd = 2;				   /* 0, 1은 STDIN, STDOUT */
+	t->fdt[0] = 0;				   /* STDIN */
+	t->fdt[1] = 1;				   /* STDOUT */
+								   // #endif
+	tid = t->tid = allocate_tid(); /* ! 원래 순서는 TID_ERROR if문 바깥 바로 */
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
@@ -225,23 +237,12 @@ tid_t thread_create(const char *name, int priority,
 
 	list_push_back(&all_list, &t->allelem);
 
-#ifdef USERPROG
-	/* file descriptor 관련 자료구조 초기화 */
-	t->fdt[0] = STDIN_FILENO;
-	t->fdt[1] = STDOUT_FILENO; 
-	t->next_fd = 2; 
-
-	list_push_back(&thread_current()->children_list, &t->child_elem);
-
-	t->exit_status = 0;
-#endif
-
 	/* Add to run queue. */
 	thread_unblock(t);
 
 	/* 생성된 스레드의 우선순위가 현재 실행중인
 	   스레드의 우선순위보다 높다면, CPU를 양보한다. */
-	test_max_priority();
+	test_max_priority(); /* ! 이 부분이 원래는 preemt_by_priority */
 
 	return tid;
 }
@@ -438,7 +439,8 @@ void thread_set_priority(int new_priority)
 {
 	/* mlfqs 스케줄러를 활성 하면 thread_mlfqs 변수는 ture로 설정됨
 	   mlfqs 스케줄러 일때 우선순위를 임의로 변경할수 없도록 한다. */
-	if (thread_mlfqs) return;
+	// if (thread_mlfqs)
+	// 	return;
 
 	thread_current()->priority = new_priority;
 	thread_current()->init_priority = new_priority;
@@ -465,7 +467,7 @@ void thread_set_nice(int nice UNUSED)
 
 	old_level = intr_disable();
 	t->nice = nice;
-	mlfqs_priority(t);
+	// mlfqs_priority(t);
 	test_max_priority();
 	intr_set_level(old_level);
 }
@@ -588,13 +590,14 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
 
+/* --- PROJECT 2 : system call ------------------------------ */
 #ifdef USERPROG
+	t->exit_status = 0;
 	list_init(&t->children_list);
-
-	sema_init(&t->sema_exit,0);
-	sema_init(&t->sema_wait,0);
-	sema_init(&t->sema_fork,0);
-
+	sema_init(&t->sema_exit, 0);
+	sema_init(&t->sema_wait, 0);
+	sema_init(&t->sema_fork, 0);
+	t->running_file = NULL;
 #endif
 
 	/* MLFQ 자료구조 초기화 */
@@ -799,7 +802,7 @@ void donate_priority(void)
 {
 	struct thread *holder = thread_current()->wait_on_lock->holder;
 	int count = 0;
-	while (holder != NULL)
+	while (holder != NULL) /* ! 이 부분이 다름 */
 	{
 		holder->priority = thread_current()->priority;
 		count++;
@@ -863,18 +866,19 @@ void mlfqs_priority(struct thread *t)
 {
 	/* 해당 스레드가 idle_thread 가 아닌지 검사 */
 	/*priority계산식을 구현 (fixed_point.h의 계산함수 이용)*/
-    if (t != idle_thread) {
-        int rec_by_4 = div_mixed(t->recent_cpu, 4);
-        int nice2 = 2 * t->nice;
-        int to_sub = add_mixed(rec_by_4, nice2);
-        int tmp = sub_mixed(to_sub, (int)PRI_MAX);
-        int pri_result = fp_to_int(sub_fp(0, tmp));
-        if (pri_result < PRI_MIN)
-            pri_result = PRI_MIN;
-        if (pri_result > PRI_MAX)
-            pri_result = PRI_MAX;
-        t->priority = pri_result;
-    }
+	if (t != idle_thread)
+	{
+		int rec_by_4 = div_mixed(t->recent_cpu, 4);
+		int nice2 = 2 * t->nice;
+		int to_sub = add_mixed(rec_by_4, nice2);
+		int tmp = sub_mixed(to_sub, (int)PRI_MAX);
+		int pri_result = fp_to_int(sub_fp(0, tmp));
+		if (pri_result < PRI_MIN)
+			pri_result = PRI_MIN;
+		if (pri_result > PRI_MAX)
+			pri_result = PRI_MAX;
+		t->priority = pri_result;
+	}
 }
 
 /* recent_cpu 값 계산 */
@@ -882,17 +886,19 @@ void mlfqs_recent_cpu(struct thread *t)
 {
 	/* 해당 스레드가 idle_thread 가 아닌지 검사 */
 	/* recent_cpu계산식을 구현 (fixed_point.h의 계산함수 이용) */
-    if (t != idle_thread) {
-        int load_avg_2 = mult_mixed(load_avg, 2);
-        int load_avg_2_1 = add_mixed(load_avg_2, 1);
-        int frac = div_fp(load_avg_2, load_avg_2_1);
-        int tmp = mult_fp(frac, t->recent_cpu);
-        int result = add_mixed(tmp, t->nice);
-        if ((result >> 31) == (-1) >> 31) {
-            result = 0;
-        }
-        t->recent_cpu = result;
-    }
+	if (t != idle_thread)
+	{
+		int load_avg_2 = mult_mixed(load_avg, 2);
+		int load_avg_2_1 = add_mixed(load_avg_2, 1);
+		int frac = div_fp(load_avg_2, load_avg_2_1);
+		int tmp = mult_fp(frac, t->recent_cpu);
+		int result = add_mixed(tmp, t->nice);
+		if ((result >> 31) == (-1) >> 31)
+		{
+			result = 0;
+		}
+		t->recent_cpu = result;
+	}
 }
 
 /* load_avg 값 계산 */
@@ -901,32 +907,64 @@ void mlfqs_load_avg(void)
 	/* load_avg계산식을 구현 (fixed_point.h의 계산함수 이용) */
 	/* load_avg 는 0 보다 작아질 수 없다.*/
 	// load_avg = (59/60) * load_avg + (1/60) * ready_threads;
-    int a = div_fp(int_to_fp(59), int_to_fp(60));
-    int b = div_fp(int_to_fp(1), int_to_fp(60));
-    int load_avg2 = mult_fp(a, load_avg);
-    int ready_thread = (int)list_size(&ready_list);
-    ready_thread = (thread_current() == idle_thread) ? ready_thread : ready_thread + 1;
-    int ready_thread2 = mult_mixed(b, ready_thread);
-    int result = add_fp(load_avg2, ready_thread2);
-    load_avg = result;
+	int a = div_fp(int_to_fp(59), int_to_fp(60));
+	int b = div_fp(int_to_fp(1), int_to_fp(60));
+	int load_avg2 = mult_fp(a, load_avg);
+	int ready_thread = (int)list_size(&ready_list);
+	ready_thread = (thread_current() == idle_thread) ? ready_thread : ready_thread + 1;
+	int ready_thread2 = mult_mixed(b, ready_thread);
+	int result = add_fp(load_avg2, ready_thread2);
+	load_avg = result;
 }
 
 // increment recent_cpu of current thread by 1
-void mlfqs_increment(void) {
-    if (thread_current() != idle_thread) {
-        int cur_recent_cpu = thread_current()->recent_cpu;
-        thread_current()->recent_cpu = add_mixed(cur_recent_cpu, 1);
-    }
+void mlfqs_increment(void)
+{
+	if (thread_current() != idle_thread)
+	{
+		int cur_recent_cpu = thread_current()->recent_cpu;
+		thread_current()->recent_cpu = add_mixed(cur_recent_cpu, 1);
+	}
 }
 
-void mlfqs_recalc_recent_cpu(void) {
-    for (struct list_elem *tmp = list_begin(&all_list); tmp != list_end(&all_list); tmp = list_next(tmp)) {
-        mlfqs_recent_cpu(list_entry(tmp, struct thread, allelem));
-    }
+void mlfqs_recalc_recent_cpu(void)
+{
+	for (struct list_elem *tmp = list_begin(&all_list); tmp != list_end(&all_list); tmp = list_next(tmp))
+	{
+		mlfqs_recent_cpu(list_entry(tmp, struct thread, allelem));
+	}
 }
 
-void mlfqs_recalc_priority(void) {
-    for (struct list_elem *tmp = list_begin(&all_list); tmp != list_end(&all_list); tmp = list_next(tmp)) {
-        mlfqs_priority(list_entry(tmp, struct thread, allelem));
-    }
+void mlfqs_recalc_priority(void)
+{
+	for (struct list_elem *tmp = list_begin(&all_list); tmp != list_end(&all_list); tmp = list_next(tmp))
+	{
+		mlfqs_priority(list_entry(tmp, struct thread, allelem));
+	}
 }
+
+/* --- PROJECT 2 : system call ------------------------------ */
+/* 자식 리스트를 검색하여 struct thread의 주소 리턴 */
+struct thread *get_child_by_tid(tid_t tid)
+{
+	struct thread *parent = thread_current();
+	struct list *children_list = &parent->children_list;
+
+	if (list_empty(children_list))
+	{
+		return NULL;
+	}
+
+	struct list_elem *c_elem = list_begin(children_list);
+	while (c_elem != list_end(children_list)) /* ! 여기 for문인데 우리는 while 그대로 써봄 */
+	{
+		struct thread *child = list_entry(c_elem, struct thread, child_elem);
+		if (child->tid == tid)
+		{
+			return child;
+		}
+		c_elem = list_next(c_elem);
+	}
+	return NULL;
+}
+/* ---------------------------------------------------------- */
