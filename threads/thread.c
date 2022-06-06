@@ -237,6 +237,17 @@ tid_t thread_create(const char *name, int priority,
 
 	list_push_back(&all_list, &t->allelem);
 
+#ifdef USERPROG
+	/* file descriptor 관련 자료구조 초기화 */
+	t->fdt[0] = STDIN_FILENO;
+	t->fdt[1] = STDOUT_FILENO;
+	t->next_fd = 2;
+
+	list_push_back(&thread_current()->children_list, &t->child_elem);
+
+	t->exit_status = 0;
+#endif
+
 	/* Add to run queue. */
 	thread_unblock(t);
 
@@ -441,6 +452,8 @@ void thread_set_priority(int new_priority)
 	   mlfqs 스케줄러 일때 우선순위를 임의로 변경할수 없도록 한다. */
 	// if (thread_mlfqs)
 	// 	return;
+	if (thread_mlfqs)
+		return;
 
 	thread_current()->priority = new_priority;
 	thread_current()->init_priority = new_priority;
@@ -800,15 +813,26 @@ allocate_tid(void)
    ** nested depth는 8로 제한 ** */
 void donate_priority(void)
 {
-	struct thread *holder = thread_current()->wait_on_lock->holder;
-	int count = 0;
-	while (holder != NULL) /* ! 이 부분이 다름 */
+	// struct thread *holder = thread_current()->wait_on_lock->holder;
+	// int count = 0;
+	// while (holder != NULL)
+	// {
+	// 	holder->priority = thread_current()->priority;
+	// 	count++;
+	// 	if (count > 8 || holder->wait_on_lock == NULL)
+	// 		break;
+	// 	holder = holder->wait_on_lock->holder;
+	// }
+	struct thread *t = thread_current();
+	struct lock *lock = t->wait_on_lock;
+	int depth = 0;
+	while (lock && depth < 8)
 	{
-		holder->priority = thread_current()->priority;
-		count++;
-		if (count > 8 || holder->wait_on_lock == NULL)
-			break;
-		holder = holder->wait_on_lock->holder;
+		if (!lock->holder)
+			return;
+		lock->holder->priority = t->priority;
+		lock = lock->holder->wait_on_lock;
+		depth++;
 	}
 }
 

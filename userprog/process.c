@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -40,6 +41,7 @@ tid_t process_create_initd(const char *file_name)
 	//실행파일의 이름을 가져온다. (커멘드라인???)
 	char *fn_copy;
 	tid_t tid;
+	lock_init(&file_lock);
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
@@ -85,7 +87,7 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 	/* Clone current thread to new thread.*/
 	/* cur = 부모 프로세스(Caller)! */
 	struct thread *curr = thread_current();
-	// memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
+	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
 
 	/* 새롭게 프로세스를 하나 더 만든다. 이 자식 프로세스는 __do_fork()를 수행한다. */
 	tid_t tid = thread_create(name, curr->priority, __do_fork, curr);
@@ -208,6 +210,7 @@ __do_fork(void *aux)
 		struct file *file = parent->fdt[i];
 		if (file == NULL)
 		{
+
 			continue;
 		}
 		bool found = false;
@@ -466,21 +469,23 @@ load(const char *file_name, struct intr_frame *if_)
 	process_activate(thread_current()); //레지스터 값을 실행중인 스레드의 페이지 테이블 주소로 변경
 
 	/* Open executable file. */
+	lock_acquire(&file_lock);
 	file = filesys_open(file_name); //프로그램 파일 오픈
 
-	// printf("load: %s: open failed?\n", file_name);
 	if (file == NULL)
 	{
+		lock_release(&file_lock);
 		printf("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
-	/* load 도중 write할 수 없도록 lock */
+	lock_release(&file_lock);
 	file_deny_write(file);
 	t->running_file = file;
-
 	/* Read and verify executable header.
-	   ELF파일의 헤더 정보를 읽어와 저장 */
+		ELF파일의 헤더 정보를 읽어와 저장
+	*/
+
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
 		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
