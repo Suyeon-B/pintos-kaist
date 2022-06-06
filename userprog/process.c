@@ -41,7 +41,6 @@ tid_t process_create_initd(const char *file_name)
 	//실행파일의 이름을 가져온다. (커멘드라인???)
 	char *fn_copy;
 	tid_t tid;
-	lock_init(&file_lock);
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
@@ -51,10 +50,8 @@ tid_t process_create_initd(const char *file_name)
 	strlcpy(fn_copy, file_name, PGSIZE);
 
 	/* 첫번째 공백 전까지의 문자열 파싱 */ /* ! 이 부분 바꿈 */
-	// char *token, *save_ptr;						 //토큰, 분리되고 남은 문자열
-	// token = strtok_r(file_name, " ", &save_ptr); // 첫번째 인자
-	char *save_ptr;						 //토큰, 분리되고 남은 문자열
-	strtok_r(file_name, " ", &save_ptr); // 첫번째 인자
+	char *save_ptr;						   //토큰, 분리되고 남은 문자열
+	strtok_r(file_name, " ", &save_ptr);   // 첫번째 인자
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy); //특정 기능을 가진 스레드 생성
@@ -199,7 +196,7 @@ __do_fork(void *aux)
 	 * TODO:       the resources of parent. */
 
 	/* --- PROJECT 2 : system call ------------------------------ */
-	if (parent->fdt == FD_LIMIT)
+	if (parent->next_fd == FD_LIMIT)
 	{
 		goto error;
 	}
@@ -248,10 +245,13 @@ error:
  인터럽트 종료를 통해 유저프로그램으로 점프
  = ppt에서 start_process
  */
-int process_exec(void *f_name) /* ! 여기 완전 다름 */
-{							   //프로세스 실행 - 실행하려는 바이너리 파일 이름을 가져옴
+int process_exec(void *f_name)
+{ //프로세스 실행 - 실행하려는 바이너리 파일 이름을 가져옴
 	char *file_name = f_name;
+	char *file_name_copy; //파싱해서 담아주기 - 파일을 담을수있
 	bool success;
+
+	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -264,13 +264,32 @@ int process_exec(void *f_name) /* ! 여기 완전 다름 */
 	/* We first kill the current context */
 	process_cleanup();
 
+	//파싱하기
+	int token_count = 0;
+	char *token, *last;
+	char *arg_list[128];
+	char *tmp_save = token;
+
+	token = strtok_r(file_name_copy, " ", &last);
+	arg_list[token_count] = token;
+
+	while (token != NULL)
+	{
+		token = strtok_r(NULL, " ", &last);
+		token_count++;
+		arg_list[token_count] = token;
+	}
+
 	/* And then load the binary */
-	success = load(file_name, &_if); //해당 바이너리 파일을 메모리에 로드하기
+	success = load(arg_list[0], &_if); //해당 바이너리 파일을 메모리에 로드하기
 
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
 		return -1;
+
+	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
+	argument_stack(token_count, arg_list, &_if);
 
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 	/* Start switched process. */
@@ -290,7 +309,6 @@ int process_exec(void *f_name) /* ! 여기 완전 다름 */
 int process_wait(tid_t child_tid UNUSED)
 {
 	/* 자식 프로세스의 프로세스 디스크립터(struct thread) 검색 */
-	struct thread *parent = thread_current();
 	struct thread *child = get_child_by_tid(child_tid);
 
 	/* 예외 처리 발생시 -1 리턴 */
@@ -447,21 +465,6 @@ load(const char *file_name, struct intr_frame *if_)
 	bool success = false;
 	int i;
 
-	/* Argument parsing */
-	char *arg_list[64];
-	char *token, *last;
-	int token_count = 0;
-
-	token = strtok_r(file_name, " ", &last);
-	arg_list[token_count] = token;
-
-	while (token != NULL)
-	{
-		token = strtok_r(NULL, " ", &last);
-		arg_list[token_count] = token;
-		token_count++;
-	}
-
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create(); //유저 프로세스의 페이지 테이블 생성
 	if (t->pml4 == NULL)
@@ -469,23 +472,19 @@ load(const char *file_name, struct intr_frame *if_)
 	process_activate(thread_current()); //레지스터 값을 실행중인 스레드의 페이지 테이블 주소로 변경
 
 	/* Open executable file. */
-	lock_acquire(&file_lock);
 	file = filesys_open(file_name); //프로그램 파일 오픈
 
 	if (file == NULL)
 	{
-		lock_release(&file_lock);
 		printf("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
-	lock_release(&file_lock);
-	file_deny_write(file);
-	t->running_file = file;
 	/* Read and verify executable header.
 		ELF파일의 헤더 정보를 읽어와 저장
 	*/
-
+	t->running_file = file;
+	file_deny_write(file);
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
 		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
@@ -494,7 +493,8 @@ load(const char *file_name, struct intr_frame *if_)
 	}
 
 	/* Read program headers.
-	   배치 정보를 읽어와 저장. */
+		배치 정보를 읽어와 저장.
+	*/
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++)
 	{
@@ -562,8 +562,6 @@ load(const char *file_name, struct intr_frame *if_)
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
-	argument_stack(token_count, arg_list, &if_);
 
 	success = true;
 
@@ -803,41 +801,77 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
 	argc : 인자의 개수
 	if_ : 스택 포인터를 가리키는 주소 값을 저장할 intr_frame
 	*/
-	char *arg_address[128]; //총 128개 저장가능
+	// char *arg_address[128]; //총 128개 저장가능
 
-	/* 프로그램 이름 및 인자(문자열) push */
-	for (int k = argc - 1; k >= 0; k--) //뒤에서 부터 넣어주기
+	// /* 프로그램 이름 및 인자(문자열) push */
+	// for (int k = argc - 1; k >= 0; k--) //뒤에서 부터 넣어주기
+	// {
+	// 	int argv_len = strlen(argv[k]);
+	// 	if_->rsp = if_->rsp - (argv_len + 1);
+	// 	memcpy(if_->rsp, argv[k], argv_len + 1); //메모리 카피해 주기
+	// 	arg_address[k] = if_->rsp;				 //해당 메모리 저장
+	// }
+
+	// /* Insert padding for word-align */
+	// /* ! 여기 8바이트 정렬 다르고, memset쓴 거 다름 */
+	// while (if_->rsp % 16 != 0)
+	// {
+	// 	if_->rsp--;
+	// 	*(uint8_t *)(if_->rsp) = 0;
+	// }
+
+	// if_->rsp = if_->rsp - 8;
+	// *(int8_t *)if_->rsp = 0;
+
+	// /* 프로그램 이름 및 인자 주소들 push */
+	// for (int i = argc - 1; i >= 0; i--)
+	// {
+	// 	if_->rsp = if_->rsp - 8;
+	// 	memcpy(if_->rsp, &arg_address[i], sizeof(char **));
+	// }
+
+	// /* fake addr 0 넣어주기 */
+	// if_->rsp = if_->rsp - 16;
+	// *(int8_t *)if_->rsp = 0;
+
+	// if_->R.rdi = argc;			/* 문자열의 개수 저장 */
+	// if_->R.rsi = if_->rsp + 16; /*  문자열을 가리키는 주소들의 배열을 가리킴 */
+	int i;
+	char *argu_addr[128];
+	int argc_len;
+
+	for (i = argc - 1; i >= 0; i--)
 	{
-		int argv_len = strlen(argv[k]);
-		if_->rsp = if_->rsp - (argv_len + 1);
-		memcpy(if_->rsp, argv[k], argv_len + 1); //메모리 카피해 주기
-		arg_address[k] = if_->rsp;				 //해당 메모리 저장
+		argc_len = strlen(argv[i]);
+		if_->rsp = if_->rsp - (argc_len + 1);
+		memcpy(if_->rsp, argv[i], (argc_len + 1));
+		argu_addr[i] = if_->rsp;
 	}
 
-	/* Insert padding for word-align */
-	/* ! 여기 8바이트 정렬 다르고, memset쓴 거 다름 */
-	while (if_->rsp % 16 != 0)
+	while (if_->rsp % 8 != 0)
 	{
 		if_->rsp--;
-		*(uint8_t *)(if_->rsp) = 0;
+		memset(if_->rsp, 0, sizeof(uint8_t));
+	}
+
+	for (i = argc; i >= 0; i--)
+	{
+		if_->rsp = if_->rsp - 8;
+		if (i == argc)
+		{
+			memset(if_->rsp, 0, sizeof(char **));
+		}
+		else
+		{
+			memcpy(if_->rsp, &argu_addr[i], sizeof(char **));
+		}
 	}
 
 	if_->rsp = if_->rsp - 8;
-	*(int8_t *)if_->rsp = 0;
+	memset(if_->rsp, 0, sizeof(void *));
 
-	/* 프로그램 이름 및 인자 주소들 push */
-	for (int i = argc - 1; i >= 0; i--)
-	{
-		if_->rsp = if_->rsp - 8;
-		memcpy(if_->rsp, &arg_address[i], sizeof(char **));
-	}
-
-	/* fake addr 0 넣어주기 */
-	if_->rsp = if_->rsp - 16;
-	*(int8_t *)if_->rsp = 0;
-
-	if_->R.rdi = argc;			/* 문자열의 개수 저장 */
-	if_->R.rsi = if_->rsp + 16; /*  문자열을 가리키는 주소들의 배열을 가리킴 */
+	if_->R.rdi = argc;
+	if_->R.rsi = if_->rsp + 8;
 }
 
 /* Find available spot in fd_table, put file in  */

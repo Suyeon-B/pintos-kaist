@@ -63,11 +63,10 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = fork(f->R.rdi, f);
 		break;
 	case SYS_EXEC: /* Switch current process. */
-		if (exec(f->R.rdi) == -1)
-			exit(-1);
+		f->R.rax = exec(f->R.rdi);
 		break;
 	case SYS_WAIT: /* Wait for a child process to die. */
-		f->R.rax = process_wait(f->R.rdi);
+		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_CREATE: /* Create a file. */
 		f->R.rax = create(f->R.rdi, f->R.rsi);
@@ -106,9 +105,9 @@ void syscall_handler(struct intr_frame *f UNUSED)
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 void check_address(const uint64_t *addr)
 {
-	/* ! 여기 == 도 확인해보기 */
-	if (addr = NULL || !(is_user_vaddr(addr)) ||
-			   pml4_get_page(thread_current()->pml4, addr) == NULL)
+	/* !수상함 여기 == 도 확인해보기 */
+	if (addr == NULL || !(is_user_vaddr(addr)) ||
+		pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
 		exit(-1);
 	}
@@ -118,6 +117,13 @@ void check_address(const uint64_t *addr)
 void halt(void)
 {
 	power_off();
+}
+
+/* 자식 프로세스가 종료 될 때까지 대기
+   return value : 정상종료 exit status / -1 */
+int wait(tid_t pid)
+{
+	return process_wait(pid);
 }
 
 /* Save exit status at process descriptor */
@@ -153,14 +159,13 @@ int exec(const char *cmd_line)
 {
 	/* 새롭게 할당받아 프로그램을 실행시킨다. */
 	check_address(cmd_line);
-	char *fn_copy;
-	fn_copy = palloc_get_page(0);
+	char *fn_copy = palloc_get_page(PAL_ZERO);
 	if (fn_copy == NULL)
-	{
-		exit(-1);
-	}
+		return -1;
 	strlcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
 
+	char *save_ptr;
+	strtok_r(cmd_line, " ", &save_ptr);
 	if (process_exec(fn_copy) == -1)
 	{
 		return -1; /* exec 실패 시에만 리턴 */
@@ -319,7 +324,7 @@ unsigned tell(int fd)
 	{
 		return;
 	}
-	return file_tell(curr_file);
+	file_tell(curr_file);
 }
 
 void close(int fd)
@@ -330,7 +335,3 @@ void close(int fd)
 	}
 	process_close_file(fd);
 }
-
-// int dup2(int oldfd, int newfd)
-// {
-// }

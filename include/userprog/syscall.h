@@ -14,6 +14,7 @@ void halt(void);
 void exit(int status);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
+int wait(tid_t pid);
 int exec(const char *cmd_line);
 tid_t fork(const char *thread_name, struct intr_frame *f);
 int open(const char *file);

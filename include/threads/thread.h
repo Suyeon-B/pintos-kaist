@@ -115,8 +115,8 @@ struct thread
 	struct list_elem allelem; /* 모든 thread의 recent_cpu와 priority값 재계산하기 위함 */
 							  /* ---------------------------------------------------------- */
 
-/* --- PROJECT 2 : system call ------------------------------ */
-#ifdef USERPROG
+	/* --- PROJECT 2 : system call ------------------------------ */
+	// #ifdef USERPROG
 	int exit_status;			 /* exit 호출 시 종료 status */
 	struct intr_frame parent_if; /* 부모의 interrupt frame - fork */
 	struct list children_list;	 /* 자식 리스트 */
@@ -131,7 +131,7 @@ struct thread
 	struct file *running_file;
 	uint64_t *pml4; /* Page map level 4 */
 /* ---------------------------------------------------------- */
-#endif
+// #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
