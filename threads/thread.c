@@ -800,27 +800,27 @@ allocate_tid(void)
    ** nested depth는 8로 제한 ** */
 void donate_priority(void)
 {
-	struct thread *holder = thread_current()->wait_on_lock->holder;
-	int count = 0;
-	while (holder != NULL)
-	{
-		holder->priority = thread_current()->priority;
-		count++;
-		if (count > 8 || holder->wait_on_lock == NULL)
-			break;
-		holder = holder->wait_on_lock->holder;
-	}
-	// struct thread *t = thread_current();
-	// struct lock *lock = t->wait_on_lock;
-	// int depth = 0;
-	// while (lock && depth < 8)
+	// struct thread *holder = thread_current()->wait_on_lock->holder;
+	// int count = 0;
+	// while (holder != NULL)
 	// {
-	// 	if (!lock->holder)
-	// 		return;
-	// 	lock->holder->priority = t->priority;
-	// 	lock = lock->holder->wait_on_lock;
-	// 	depth++;
+	// 	holder->priority = thread_current()->priority;
+	// 	count++;
+	// 	if (count > 8 || holder->wait_on_lock == NULL)
+	// 		break;
+	// 	holder = holder->wait_on_lock->holder;
 	// }
+	struct thread *t = thread_current();
+	struct lock *lock = t->wait_on_lock;
+	int depth = 0;
+	while (lock && depth < 8)
+	{
+		if (!lock->holder)
+			return;
+		lock->holder->priority = t->priority;
+		lock = lock->holder->wait_on_lock;
+		depth++;
+	}
 }
 
 /* lock을 해지했을때 donations 리스트에서

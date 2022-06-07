@@ -105,9 +105,8 @@ void syscall_handler(struct intr_frame *f UNUSED)
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 void check_address(const uint64_t *addr)
 {
-	/* !수상함 여기 == 도 확인해보기 */
-	if (addr == NULL || !(is_user_vaddr(addr)) ||
-		pml4_get_page(thread_current()->pml4, addr) == NULL)
+	if (addr = NULL || !(is_user_vaddr(addr)) ||
+			   pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
 		exit(-1);
 	}
@@ -159,10 +158,10 @@ int exec(const char *cmd_line)
 {
 	/* 새롭게 할당받아 프로그램을 실행시킨다. */
 	check_address(cmd_line);
-	char *fn_copy = palloc_get_page(PAL_ZERO);
+	char *fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return -1;
-	strlcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
+	memcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
 
 	char *save_ptr;
 	strtok_r(cmd_line, " ", &save_ptr);

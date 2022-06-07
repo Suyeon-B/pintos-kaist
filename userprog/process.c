@@ -38,7 +38,7 @@ process_init(void)
  * = ppt에서 process_execute() */
 tid_t process_create_initd(const char *file_name)
 {
-	//실행파일의 이름을 가져온다. (커멘드라인???)
+	//실행파일의 이름을 가져온다.
 	char *fn_copy;
 	tid_t tid;
 
@@ -49,13 +49,13 @@ tid_t process_create_initd(const char *file_name)
 		return TID_ERROR;
 	strlcpy(fn_copy, file_name, PGSIZE);
 
-	/* 첫번째 공백 전까지의 문자열 파싱 */ /* ! 이 부분 바꿈 */
-	char *save_ptr;						   //토큰, 분리되고 남은 문자열
-	strtok_r(file_name, " ", &save_ptr);   // 첫번째 인자
+	/* 첫번째 공백 전까지(파일명)의 문자열 파싱 */
+	char *save_ptr;						 /* 분리되고 남은 문자열 */
+	strtok_r(file_name, " ", &save_ptr); /* 첫번째 인자 */
 
-	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy); //특정 기능을 가진 스레드 생성
-	// 실행하려는 파일의 이름을 스레드의 이름으로 전달한다음 실행(initd)기능을 사용하여 스레드를 생성한다.
+	/* 실행하려는 파일의 이름을 스레드의 이름으로 전달하고,
+	   실행(initd)기능을 사용하여 스레드를 생성한다. */
+	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
 
 	if (tid == TID_ERROR)
 		palloc_free_page(fn_copy);
@@ -239,16 +239,14 @@ error:
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail.
- run_task에서 호출 시작 프로세스
- 인터럽트 프레임과 사용자 스택을 초기화 한다.
- 사용자 스택에서 arguments 설정
- 인터럽트 종료를 통해 유저프로그램으로 점프
- = ppt에서 start_process
- */
-int process_exec(void *f_name)
-{ //프로세스 실행 - 실행하려는 바이너리 파일 이름을 가져옴
+ * run_task에서 호출 시작 프로세스
+ * 인터럽트 프레임과 사용자 스택을 초기화 한다.
+ * 사용자 스택에서 arguments 설정
+ * 인터럽트 종료를 통해 유저프로그램으로 점프 */
+int process_exec(void *f_name) /* 프로세스 실행 - 실행하려는 바이너리 파일 이름을 가져옴 */
+{
 	char *file_name = f_name;
-	char *file_name_copy; //파싱해서 담아주기 - 파일을 담을수있
+	char *file_name_copy;
 	bool success;
 
 	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
@@ -264,11 +262,10 @@ int process_exec(void *f_name)
 	/* We first kill the current context */
 	process_cleanup();
 
-	//파싱하기
+	/* 파싱하기 */
 	int token_count = 0;
 	char *token, *last;
-	char *arg_list[128];
-	char *tmp_save = token;
+	char *arg_list[65]; /* \0 포함 최대 65개 */
 
 	token = strtok_r(file_name_copy, " ", &last);
 	arg_list[token_count] = token;
@@ -280,20 +277,20 @@ int process_exec(void *f_name)
 		arg_list[token_count] = token;
 	}
 
-	/* And then load the binary */
-	success = load(arg_list[0], &_if); //해당 바이너리 파일을 메모리에 로드하기
+	/* 해당 바이너리 파일을 메모리에 로드하기 */
+	success = load(arg_list[0], &_if);
 
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
 		return -1;
 
-	// 유저 프로그램이 실행되기 전에 스택에 인자 저장
+	/* 유저 프로그램이 실행되기 전에 스택에 인자 저장 */
 	argument_stack(token_count, arg_list, &_if);
 
-	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);  - for debug
 	/* Start switched process. */
-	do_iret(&_if); // 유저 프로그램 실행
+	do_iret(&_if); /* 유저 프로그램 실행 */
 	NOT_REACHED();
 }
 
@@ -311,18 +308,19 @@ int process_wait(tid_t child_tid UNUSED)
 	/* 자식 프로세스의 프로세스 디스크립터(struct thread) 검색 */
 	struct thread *child = get_child_by_tid(child_tid);
 
-	/* 예외 처리 발생시 -1 리턴 */
-	if (child == NULL) // If TID is invalid
+	/* If TID is invalid */
+	if (child == NULL)
 	{
 		return -1;
 	}
-	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용)
-	   근데 자기 lock에 걸리면 꺼내줄 스레드가 없으니까 자식 세마 리스트로 들어감 */
+
+	/* 자식프로세스가 종료될 때까지 부모 프로세스 대기(세마포어 이용) */
 	sema_down(&child->sema_wait);
-	/* c_thread가 삭제되어 오면 remove를 할 수 없으니 살려둬야한다! */
 	int child_exit_status = child->exit_status;
 	/* 자식 프로세스 디스크립터 삭제 */
 	list_remove(&child->child_elem);
+	/* c_thread가 삭제되어 오면 remove를 할 수 없으니,
+	 * sema up은 fdt에서 삭제까지 마친 뒤에 한다. */
 	sema_up(&child->sema_exit);
 
 	/* 자식 프로세스의 exit status 리턴 */
@@ -457,7 +455,7 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load(const char *file_name, struct intr_frame *if_)
-{ // 사용자 스택 유형, 함수의 시작진입 점등을 포함한다.
+{ /* 사용자 스택 유형, 함수의 시작진입점등을 포함한다. */
 	struct thread *t = thread_current();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -466,13 +464,13 @@ load(const char *file_name, struct intr_frame *if_)
 	int i;
 
 	/* Allocate and activate page directory. */
-	t->pml4 = pml4_create(); //유저 프로세스의 페이지 테이블 생성
+	t->pml4 = pml4_create(); /* 유저 프로세스의 페이지 테이블 생성 */
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate(thread_current()); //레지스터 값을 실행중인 스레드의 페이지 테이블 주소로 변경
+	process_activate(thread_current()); /* 레지스터 값을 실행중인 스레드의 페이지 테이블 주소로 변경 */
 
 	/* Open executable file. */
-	file = filesys_open(file_name); //프로그램 파일 오픈
+	file = filesys_open(file_name); /* 프로그램 파일 오픈 */
 
 	if (file == NULL)
 	{
@@ -481,8 +479,8 @@ load(const char *file_name, struct intr_frame *if_)
 	}
 
 	/* Read and verify executable header.
-		ELF파일의 헤더 정보를 읽어와 저장
-	*/
+	 * ELF파일의 헤더 정보를 읽어와 저장
+	 * 이 때 write 중인 파일은 lock */
 	t->running_file = file;
 	file_deny_write(file);
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
@@ -493,8 +491,7 @@ load(const char *file_name, struct intr_frame *if_)
 	}
 
 	/* Read program headers.
-		배치 정보를 읽어와 저장.
-	*/
+	 * 배치 정보를 읽어와 저장 */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++)
 	{
@@ -560,14 +557,10 @@ load(const char *file_name, struct intr_frame *if_)
 	/* Start address. */
 	if_->rip = ehdr.e_entry; //
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	// file_close(file);
 	return success;
 }
 
