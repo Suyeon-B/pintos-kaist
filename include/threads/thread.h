@@ -125,7 +125,6 @@ struct thread
 	struct semaphore sema_wait;	 /* wait 세마포어 */
 	struct semaphore sema_fork;	 /* fork 세마포어 */
 								 /* file descriptor */
-								 // struct file **fdt;
 	struct file **fdt;
 	int next_fd; /* fd idx */
 	struct file *running_file;
@@ -135,6 +134,7 @@ struct thread
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+	struct hash vm;
 #endif
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;		  /* Detects stack overflow. */

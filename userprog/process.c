@@ -47,7 +47,7 @@ tid_t process_create_initd(const char *file_name)
 	fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy(fn_copy, file_name, PGSIZE);
+	memcpy(fn_copy, file_name, PGSIZE);
 
 	/* 첫번째 공백 전까지(파일명)의 문자열 파싱 */
 	char *save_ptr;						 /* 분리되고 남은 문자열 */
@@ -342,10 +342,9 @@ void process_exit(void)
 	file_close(curr->running_file);				/* running file 닫기 */
 	palloc_free_multiple(curr->fdt, FDT_PAGES); /* fd_table 반환 */
 
-	process_cleanup(); /* ! 이거 세마 밑에 있어야되는 거 아님? */
-
 	sema_up(&curr->sema_wait);	 /* wait하고 있을 parent를 위해 */
 	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
+	process_cleanup();			 /* ! 이거 세마 밑에 있어야되는 거 아님? */
 }
 
 /* Free the current process's resources. */
@@ -794,77 +793,77 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
 	argc : 인자의 개수
 	if_ : 스택 포인터를 가리키는 주소 값을 저장할 intr_frame
 	*/
-	// char *arg_address[128]; //총 128개 저장가능
+	char *arg_address[128]; //총 128개 저장가능
 
-	// /* 프로그램 이름 및 인자(문자열) push */
-	// for (int k = argc - 1; k >= 0; k--) //뒤에서 부터 넣어주기
-	// {
-	// 	int argv_len = strlen(argv[k]);
-	// 	if_->rsp = if_->rsp - (argv_len + 1);
-	// 	memcpy(if_->rsp, argv[k], argv_len + 1); //메모리 카피해 주기
-	// 	arg_address[k] = if_->rsp;				 //해당 메모리 저장
-	// }
-
-	// /* Insert padding for word-align */
-	// /* ! 여기 8바이트 정렬 다르고, memset쓴 거 다름 */
-	// while (if_->rsp % 16 != 0)
-	// {
-	// 	if_->rsp--;
-	// 	*(uint8_t *)(if_->rsp) = 0;
-	// }
-
-	// if_->rsp = if_->rsp - 8;
-	// *(int8_t *)if_->rsp = 0;
-
-	// /* 프로그램 이름 및 인자 주소들 push */
-	// for (int i = argc - 1; i >= 0; i--)
-	// {
-	// 	if_->rsp = if_->rsp - 8;
-	// 	memcpy(if_->rsp, &arg_address[i], sizeof(char **));
-	// }
-
-	// /* fake addr 0 넣어주기 */
-	// if_->rsp = if_->rsp - 16;
-	// *(int8_t *)if_->rsp = 0;
-
-	// if_->R.rdi = argc;			/* 문자열의 개수 저장 */
-	// if_->R.rsi = if_->rsp + 16; /*  문자열을 가리키는 주소들의 배열을 가리킴 */
-	int i;
-	char *argu_addr[128];
-	int argc_len;
-
-	for (i = argc - 1; i >= 0; i--)
+	/* 프로그램 이름 및 인자(문자열) push */
+	for (int k = argc - 1; k >= 0; k--) //뒤에서 부터 넣어주기
 	{
-		argc_len = strlen(argv[i]);
-		if_->rsp = if_->rsp - (argc_len + 1);
-		memcpy(if_->rsp, argv[i], (argc_len + 1));
-		argu_addr[i] = if_->rsp;
+		int argv_len = strlen(argv[k]);
+		if_->rsp = if_->rsp - (argv_len + 1);
+		memcpy(if_->rsp, argv[k], argv_len + 1); //메모리 카피해 주기
+		arg_address[k] = if_->rsp;				 //해당 메모리 저장
 	}
 
-	while (if_->rsp % 8 != 0)
+	/* Insert padding for word-align */
+	/* ! 여기 8바이트 정렬 다르고, memset쓴 거 다름 */
+	while (if_->rsp % 16 != 0)
 	{
 		if_->rsp--;
-		memset(if_->rsp, 0, sizeof(uint8_t));
-	}
-
-	for (i = argc; i >= 0; i--)
-	{
-		if_->rsp = if_->rsp - 8;
-		if (i == argc)
-		{
-			memset(if_->rsp, 0, sizeof(char **));
-		}
-		else
-		{
-			memcpy(if_->rsp, &argu_addr[i], sizeof(char **));
-		}
+		*(uint8_t *)(if_->rsp) = 0;
 	}
 
 	if_->rsp = if_->rsp - 8;
-	memset(if_->rsp, 0, sizeof(void *));
+	*(int8_t *)if_->rsp = 0;
 
-	if_->R.rdi = argc;
-	if_->R.rsi = if_->rsp + 8;
+	/* 프로그램 이름 및 인자 주소들 push */
+	for (int i = argc - 1; i >= 0; i--)
+	{
+		if_->rsp = if_->rsp - 8;
+		memcpy(if_->rsp, &arg_address[i], sizeof(char **));
+	}
+
+	/* fake addr 0 넣어주기 */
+	if_->rsp = if_->rsp - 16;
+	*(int8_t *)if_->rsp = 0;
+
+	if_->R.rdi = argc;			/* 문자열의 개수 저장 */
+	if_->R.rsi = if_->rsp + 16; /*  문자열을 가리키는 주소들의 배열을 가리킴 */
+								// int i;
+								// char *argu_addr[128];
+								// int argc_len;
+
+	// for (i = argc - 1; i >= 0; i--)
+	// {
+	// 	argc_len = strlen(argv[i]);
+	// 	if_->rsp = if_->rsp - (argc_len + 1);
+	// 	memcpy(if_->rsp, argv[i], (argc_len + 1));
+	// 	argu_addr[i] = if_->rsp;
+	// }
+
+	// while (if_->rsp % 8 != 0)
+	// {
+	// 	if_->rsp--;
+	// 	memset(if_->rsp, 0, sizeof(uint8_t));
+	// }
+
+	// for (i = argc; i >= 0; i--)
+	// {
+	// 	if_->rsp = if_->rsp - 8;
+	// 	if (i == argc)
+	// 	{
+	// 		memset(if_->rsp, 0, sizeof(char **));
+	// 	}
+	// 	else
+	// 	{
+	// 		memcpy(if_->rsp, &argu_addr[i], sizeof(char **));
+	// 	}
+	// }
+
+	// if_->rsp = if_->rsp - 8;
+	// memset(if_->rsp, 0, sizeof(void *));
+
+	// if_->R.rdi = argc;
+	// if_->R.rsi = if_->rsp + 8;
 }
 
 /* Find available spot in fd_table, put file in  */
