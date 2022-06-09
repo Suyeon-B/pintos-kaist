@@ -1,0 +1,34 @@
+Kernel command line: -q -f put sm-full run sm-full
+0 ~ 9fc00 1
+100000 ~ 13e0000 1
+Pintos booting with: 
+	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
+	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
+Calibrating timer...  157,081,600 loops/s.
+hd0:0: detected 321 sector (160 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
+hd1:0: detected 106 sector (53 kB) disk, model "QEMU HARDDISK", serial "QM00003"
+hd1:1: detected 8,064 sector (3 MB) disk, model "QEMU HARDDISK", serial "QM00004"
+Formatting file system...done.
+Boot complete.
+Putting 'sm-full' into the file system...
+Executing 'sm-full':
+Kernel PANIC at ../../userprog/process.c:76 in initd(): Fail to launch initd
+
+Call stack: 0x8004218669 0x800421bd1fInterrupt 0x0d (#GP General Protection Exception) at rip=80042156a3
+ cr2=0000000000000000 error=               0
+rax 006c6c75662d6d73 rbx 0000000000000000 rcx 00000080040b8000 rdx 00000000000003d4
+rsp 0000008004243f20 rbp 0000008004243f30 rsi 000000000000a50f rdi 0000000000000000
+rip 00000080042156a3 r8 0000008004243e38  r9 000000800421bae2 r10 0000000000000000
+r11 0000000000000000 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
+r15 0000000000000000 rflags 00000002
+es: 0010 ds: 0010 cs: 0008 ss: 0010
+Kernel PANIC recursion at ../../userprog/exception.c:97 in kill().
+Timer: 60 ticks
+Thread: 30 idle ticks, 30 kernel ticks, 0 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 38 reads, 240 writes
+hd1:0: 106 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 1554 characters output
+Key

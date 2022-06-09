@@ -1,0 +1,2 @@
+FAIL
+Kernel panic in run: PANIC at ../../tests/threads/priority-fifo.c:43 in mmap-null: exit(-1)
