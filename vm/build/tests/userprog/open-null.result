@@ -1,2 +1,0 @@
-FAIL
-Kernel panic in run: PANIC at ../../tests/threads/priority-fifo.c:43 in open-null: exit(-1)
