@@ -46,7 +46,6 @@ static struct frame *vm_evict_frame(void);
 bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writable,
 									vm_initializer *init, void *aux)
 {
-
 	ASSERT(VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current()->spt;
@@ -123,7 +122,7 @@ vm_evict_frame(void)
 	return NULL;
 }
 
-/* palloc() and get frame. If there is no available page, evict the page
+/* palloc() and get frame. If there is no available page(frame), evict the page
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
  * space.*/
@@ -135,29 +134,24 @@ vm_evict_frame(void)
 static struct frame *
 vm_get_frame(void)
 {
-	struct page *p_page = palloc_get_page(PAL_USER);
-	if (!p_page)
-	{
-		/* 만약 가용한 페이지가 없으면 페이지를 제거하고 반환한다. */
-		palloc_free_page((void *)p_page);
-		/* 할당 실패 시 return 어떻게 할지 보기 */
-	}
-
+	/* 만약 가용한 프레임이 없으면 제거하고 반환한다. */
 	/* 안쪽에서는 결국 memset
-	근데 size of (struct frame) 만큼 할당하지 않아도 되는건가 */
-	struct frame *frame = palloc_get_page(PAL_USER);
+	   근데 size of (struct frame) 만큼 할당하지 않아도 되는건가
+	   -> 어차피 frame도 struct page 사이즈 */
+	/* frame */
+	struct frame *frame = (struct frame *)malloc(sizeof(struct frame));
+
 	if (frame)
 	{
-		/* frame member들을 초기화 */
-		frame = p_page->frame; /* 수상함 - 이거 vm_do_claim_page에서 해주나? */
-		frame->kva = p_page;   /* 승준 오빠 슬랙 참고 */
-
+		frame->kva = palloc_get_page(PAL_USER);
 		ASSERT(frame != NULL);
 		ASSERT(frame->page == NULL);
 
 		return frame;
 	}
-	/* frame 할당 실패 시엔 return 어떻게? */
+	/* swap in swap out */
+	/* frame 할당 실패 시 */
+	return vm_evict_frame(); /* 구현 전 */
 }
 
 /* Growing the stack. */
@@ -196,11 +190,9 @@ void vm_dealloc_page(struct page *page)
 /* VA에 할당되어있는 페이지를 요청한다. */
 bool vm_claim_page(void *va UNUSED)
 {
-	struct page *page = palloc_get_page(PAL_USER);
-
-	page->vaddr = va;
-
-	return vm_do_claim_page(page);
+	// struct page *page = palloc_get_page(PAL_USER);
+	struct page *v_page = (struct page *)pg_round_down(va);
+	return vm_do_claim_page(v_page);
 }
 
 /* Claim the PAGE and set up the mmu. */
@@ -219,7 +211,7 @@ vm_do_claim_page(struct page *page)
 	 *   PTE insert */
 	/* mmu.c 함수 일단 사용해봄.
 	 * user page = page & kernel page = frame이 맞는건지 모르겠음 */
-	pml4_set_page(thread_current()->pml4, page, frame, page->writable);
+	pml4_set_page(thread_current()->pml4, page->vaddr, frame->kva, page->writable); /* initialize writable 초기화 했는지 확인하기 */
 
 	return swap_in(page, frame->kva);
 }
