@@ -704,6 +704,7 @@ setup_stack(struct intr_frame *if_)
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
+#else  /* 이거 원래 이 함수 밑에있었음 */
 static bool
 install_page(void *upage, void *kpage, bool writable)
 {
@@ -713,17 +714,32 @@ install_page(void *upage, void *kpage, bool writable)
 	 * address, then map our page there. */
 	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
 }
-#else
+
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
 static bool
-lazy_load_segment(struct page *page, void *aux)
+lazy_load_segment(struct page *upage, void *aux)
 {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	/* Load this page. */
+	struct page *kpage = (struct page *)aux;
+	if (file_read(kpage->lazy_load_file, kpage, kpage->read_bytes) != (int)kpage->read_bytes)
+	{
+		palloc_free_page(kpage);
+		return false;
+	}
+	memset(kpage + kpage->read_bytes, 0, kpage->zero_bytes);
+	/* Add the page to the process's address space. */
+	if (!install_page(upage, kpage, kpage->writable))
+	{
+		printf("fail\n");
+		palloc_free_page(kpage);
+		return false;
+	}
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -755,12 +771,29 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		/* 수연
+		 * 여기서 고민한 점
+		 * 1. load_segment → vm_alloc_page_with_initializer를 통해 기대하는 결과는?
+		 * 2. upage와 kpage의 구분
+		 * 3. lazy_load_segment에 넘겨줄 aux가 뭘까
+		 * 4. lazy loading을 위해 파일 정보를 임시로 저장해둔 뒤,
+		 *    lazy_load_segment로 보내 한꺼번에 로드하고 싶다면 새로운 구조체를 만들어야할까 */
+		struct page *kpage = (struct page *)malloc(sizeof(struct page));
 
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
-			return false;
+		/* page fault 시에만 lazy load */
+		kpage->lazy_load_file = file;
+		kpage->read_bytes = (int)page_read_bytes;
+		kpage->zero_bytes = page_zero_bytes;
+		kpage->writable = writable;
+
+		if (vm_claim_page(upage))
+		{
+			/* TODO: Set up aux to pass information to the lazy_load_segment. */
+			void *aux = kpage; /* aux가 뭘까 */
+			if (!vm_alloc_page_with_initializer(VM_ANON, upage,
+												writable, lazy_load_segment, aux))
+				return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;

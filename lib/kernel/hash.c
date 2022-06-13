@@ -432,10 +432,10 @@ remove_elem(struct hash *h, struct hash_elem *e)
 /* --- PROJECT 3 : VM ------------------------------------ */
 /* Returns a hash value for page p. */
 unsigned
-page_hash(const struct hash_elem *p_, void *aux UNUSED)
+page_hash(const struct hash_elem *p_, void *aux)
 {
 	const struct page *page = hash_entry(p_, struct page, hash_elem);
-	return hash_bytes(&page->vaddr, sizeof page->vaddr);
+	return hash_bytes(&page->va, sizeof page->va);
 }
 
 /*  */
@@ -444,7 +444,7 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 	const struct page *page_a = hash_entry(a, struct page, hash_elem);
 	const struct page *page_b = hash_entry(b, struct page, hash_elem);
 
-	return page_a->vaddr < page_b->vaddr;
+	return page_a->va < page_b->va;
 }
 
 /* ------------------------------------------------------- */

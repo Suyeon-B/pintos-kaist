@@ -43,6 +43,9 @@ static struct frame *vm_evict_frame(void);
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
+/* 1. 새로운 page를 할당하고
+ * 2. 각 페이지 타입에 맞는 initializer를 셋팅하고
+ * 3. 유저 프로그램에게 다시 control을 넘긴다. */
 bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writable,
 									vm_initializer *init, void *aux)
 {
@@ -56,8 +59,33 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		struct page *upage = pg_round_down(upage);
+		bool success = true;
 
-		/* TODO: Insert the page into the spt. */
+		switch (type)
+		{
+		case VM_ANON:
+			/* Fetch first, page_initialize may overwrite the values */
+			uninit_new(&upage, upage->frame->kva, init, VM_ANON, aux, anon_initializer);
+			break;
+		case VM_FILE:
+			uninit_new(&upage, upage->frame->kva, init, VM_FILE, aux, file_backed_initializer);
+			break;
+#ifdef EFILESYS /* For project 4 */
+		case VM_PAGE_CACHE:
+			uninit_new(&upage, upage->frame->kva, init, VM_PAGE_CACHE, aux, page_cache_initializer);
+			break;
+#endif
+		default:
+			success = false;
+			break;
+		}
+		if (success)
+		{
+			/* TODO: Insert the page into the spt. */
+			spt_insert_page(spt, upage);
+		}
+		return success;
 	}
 err:
 	return false;
@@ -67,10 +95,9 @@ err:
 struct page *
 spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
-	struct page *page = NULL;
 	/* TODO: Fill this function. */
 	/* pg_round_down()으로 vaddr의 페이지 번호를 얻음 */
-	page = pg_round_down(va); /* 수상함 - vaddr 주소 타입으로 받아야 함? */
+	struct page *page = pg_round_down(va); /* 수상함 - vaddr 주소 타입으로 받아야 함? */
 	/* hash_find() 함수를 사용해서 hash_elem 구조체 얻음 */
 	struct hash_elem *page_hash_elem = hash_find(&spt->vm, &page->hash_elem);
 	/* 만약 존재하지 않는다면 NULL 리턴 */
@@ -135,23 +162,28 @@ static struct frame *
 vm_get_frame(void)
 {
 	/* 만약 가용한 프레임이 없으면 제거하고 반환한다. */
-	/* 안쪽에서는 결국 memset
-	   근데 size of (struct frame) 만큼 할당하지 않아도 되는건가
-	   -> 어차피 frame도 struct page 사이즈 */
-	/* frame */
+	/* 고민한 점
+	 * 	- malloc OR palloc */
 	struct frame *frame = (struct frame *)malloc(sizeof(struct frame));
-
 	if (frame)
 	{
 		frame->kva = palloc_get_page(PAL_USER);
-		ASSERT(frame != NULL);
-		ASSERT(frame->page == NULL);
-
-		return frame;
+		printf("11111111111111\n");
+		frame->page == NULL;
+		printf("22222222222222\n");
+	}
+	if (!frame->kva || !frame)
+	{
+		free(frame);
+		// return vm_evict_frame(); /* 구현 전 */
 	}
 	/* swap in swap out */
 	/* frame 할당 실패 시 */
-	return vm_evict_frame(); /* 구현 전 */
+	ASSERT(frame != NULL);
+	printf("333333333333333\n");
+	ASSERT(frame->page == NULL);
+
+	return frame;
 }
 
 /* Growing the stack. */
@@ -186,13 +218,21 @@ void vm_dealloc_page(struct page *page)
 	free(page);
 }
 
-/* Claim the page that allocate on VA. */
-/* VA에 할당되어있는 페이지를 요청한다. */
+/* Claims the page to allocate va */
 bool vm_claim_page(void *va UNUSED)
 {
-	// struct page *page = palloc_get_page(PAL_USER);
-	struct page *v_page = (struct page *)pg_round_down(va);
-	return vm_do_claim_page(v_page);
+	struct page *page = (struct page *)malloc(sizeof(struct page));
+	if (page)
+	{
+		page->va = palloc_get_page(PAL_USER);
+		page->frame = NULL;
+	}
+	if (!page || !page->va)
+	{
+		free(page);
+		return false;
+	}
+	return vm_do_claim_page(page);
 }
 
 /* Claim the PAGE and set up the mmu. */
@@ -209,9 +249,7 @@ vm_do_claim_page(struct page *page)
 	/* TODO
 	 * : 페이지의 VA를 프레임의 PA에 매핑하기 위해
 	 *   PTE insert */
-	/* mmu.c 함수 일단 사용해봄.
-	 * user page = page & kernel page = frame이 맞는건지 모르겠음 */
-	pml4_set_page(thread_current()->pml4, page->vaddr, frame->kva, page->writable); /* initialize writable 초기화 했는지 확인하기 */
+	pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable); /* initialize writable 초기화 했는지 확인하기 */
 
 	return swap_in(page, frame->kva);
 }
