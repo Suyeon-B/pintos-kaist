@@ -59,21 +59,21 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *upage = pg_round_down(upage);
+		struct page *page = (struct page *)malloc(sizeof(struct page)); /* 수상함 */
 		bool success = true;
 
-		switch (type)
+		switch (VM_TYPE(type))
 		{
 		case VM_ANON:
 			/* Fetch first, page_initialize may overwrite the values */
-			uninit_new(&upage, upage->frame->kva, init, VM_ANON, aux, anon_initializer);
+			uninit_new(&page, upage, init, type, aux, anon_initializer);
 			break;
 		case VM_FILE:
-			uninit_new(&upage, upage->frame->kva, init, VM_FILE, aux, file_backed_initializer);
+			uninit_new(&page, upage, init, type, aux, file_backed_initializer);
 			break;
 #ifdef EFILESYS /* For project 4 */
 		case VM_PAGE_CACHE:
-			uninit_new(&upage, upage->frame->kva, init, VM_PAGE_CACHE, aux, page_cache_initializer);
+			uninit_new(&page, upage, init, type, aux, page_cache_initializer);
 			break;
 #endif
 		default:
@@ -83,7 +83,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		if (success)
 		{
 			/* TODO: Insert the page into the spt. */
-			spt_insert_page(spt, upage);
+			spt_insert_page(spt, page);
 		}
 		return success;
 	}
@@ -97,14 +97,9 @@ spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
 	/* TODO: Fill this function. */
 	/* pg_round_down()으로 vaddr의 페이지 번호를 얻음 */
-	struct page *page = pg_round_down(va); /* 수상함 - vaddr 주소 타입으로 받아야 함? */
-	/* hash_find() 함수를 사용해서 hash_elem 구조체 얻음 */
-	struct hash_elem *page_hash_elem = hash_find(&spt->vm, &page->hash_elem);
-	/* 만약 존재하지 않는다면 NULL 리턴 */
-	if (page_hash_elem)
+	struct page *page = page_lookup(pg_round_down(va));
+	if (page)
 	{
-		/* hash_entry()로 해당 hash_elem의 vm_entry 구조체 리턴 */
-		page = hash_entry(page_hash_elem, struct page, hash_elem);
 		return page;
 	}
 	return NULL;
@@ -124,6 +119,7 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
+	hash_delete(&spt->vm, &page->hash_elem);
 	vm_dealloc_page(page);
 	return true;
 }
@@ -168,19 +164,18 @@ vm_get_frame(void)
 	if (frame)
 	{
 		frame->kva = palloc_get_page(PAL_USER);
-		printf("11111111111111\n");
+		// printf("11111111111111\n");
 		frame->page == NULL;
-		printf("22222222222222\n");
+		// printf("22222222222222\n");
 	}
-	if (!frame->kva || !frame)
+	if (!frame->kva)
 	{
-		free(frame);
 		// return vm_evict_frame(); /* 구현 전 */
 	}
 	/* swap in swap out */
 	/* frame 할당 실패 시 */
 	ASSERT(frame != NULL);
-	printf("333333333333333\n");
+	// printf("333333333333333\n");
 	ASSERT(frame->page == NULL);
 
 	return frame;
@@ -221,16 +216,10 @@ void vm_dealloc_page(struct page *page)
 /* Claims the page to allocate va */
 bool vm_claim_page(void *va UNUSED)
 {
-	struct page *page = (struct page *)malloc(sizeof(struct page));
-	if (page)
+	struct page *page = page_lookup(pg_round_down(va));
+	if (!page)
 	{
-		page->va = palloc_get_page(PAL_USER);
-		page->frame = NULL;
-	}
-	if (!page || !page->va)
-	{
-		free(page);
-		return false;
+		return false; /* 수상함 - 예외처리하기 */
 	}
 	return vm_do_claim_page(page);
 }

@@ -726,18 +726,20 @@ lazy_load_segment(struct page *upage, void *aux)
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	/* Load this page. */
-	struct page *kpage = (struct page *)aux;
-	if (file_read(kpage->lazy_load_file, kpage, kpage->read_bytes) != (int)kpage->read_bytes)
+	struct aux_for_lazy_load *lazy_load = (struct aux_for_lazy_load *)aux;
+
+	file_seek(lazy_load->load_file, lazy_load->offset);
+	if (file_read(lazy_load->load_file, lazy_load, lazy_load->read_bytes) != (int)lazy_load->read_bytes)
 	{
-		palloc_free_page(kpage);
+		palloc_free_page(lazy_load);
 		return false;
 	}
-	memset(kpage + kpage->read_bytes, 0, kpage->zero_bytes);
+	memset(lazy_load + lazy_load->read_bytes, 0, lazy_load->zero_bytes);
 	/* Add the page to the process's address space. */
-	if (!install_page(upage, kpage, kpage->writable))
+	if (!install_page(upage, lazy_load, lazy_load->writable))
 	{
 		printf("fail\n");
-		palloc_free_page(kpage);
+		palloc_free_page(lazy_load);
 		return false;
 	}
 }
@@ -778,22 +780,23 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		 * 3. lazy_load_segment에 넘겨줄 aux가 뭘까
 		 * 4. lazy loading을 위해 파일 정보를 임시로 저장해둔 뒤,
 		 *    lazy_load_segment로 보내 한꺼번에 로드하고 싶다면 새로운 구조체를 만들어야할까 */
-		struct page *kpage = (struct page *)malloc(sizeof(struct page));
+		struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)malloc(sizeof(struct aux_for_lazy_load));
 
 		/* page fault 시에만 lazy load */
-		kpage->lazy_load_file = file;
-		kpage->read_bytes = (int)page_read_bytes;
-		kpage->zero_bytes = page_zero_bytes;
-		kpage->writable = writable;
+		aux->load_file = file;
+		aux->offset = ofs;
+		aux->read_bytes = (int)page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		aux->writable = writable;
 
-		if (vm_claim_page(upage))
+		// if (!vm_claim_page(upage)) /* page fault가 발생할 때 load */
+		// {
+		/* TODO: Set up aux to pass information to the lazy_load_segment. */
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux))
 		{
-			/* TODO: Set up aux to pass information to the lazy_load_segment. */
-			void *aux = kpage; /* aux가 뭘까 */
-			if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-												writable, lazy_load_segment, aux))
-				return false;
+			return false;
 		}
+		// }
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
