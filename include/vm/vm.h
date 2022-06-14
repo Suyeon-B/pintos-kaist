@@ -3,6 +3,9 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 
+// PJ3
+#include "lib/kernel/hash.h"
+
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -46,7 +49,15 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
-
+	// PJ3
+	struct file *mapped_file;			// 가상 주소와 맵핑된 파일
+	struct hash_elem page_elem;	// hash table에 포함된다.
+	bool is_loaded;				// 물리메모리에 적재되었는지 알려준다.
+	bool writable;				// True일 경우, frame을 받아 메모리에 적재되었을 때 write 가능(뇌피셜) / False일 경우, frame을 받아 메모리에 적재되었을 때 read 가능(뇌피셜)
+	size_t ofs;				// 읽어야 할 파일 오프셋
+	size_t page_read_bytes;		// 가상 페이지에 쓰여져 있는 데이터 크기
+	size_t page_zero_bytes;		// 0으로 채울 남은 페이지의 바이트
+	
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -63,6 +74,17 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+};
+
+// PJ3
+// 한양대 PPT virtual memory 파트에서 12 페이지 참고
+struct aux_for_lazy_load {
+	struct file *mapped_file;
+	off_t ofs;
+	uint32_t page_read_bytes;
+	uint32_t page_zero_bytes;
+	uint8_t upage;
+	bool writable;
 };
 
 /* The function table for page operations.
@@ -85,6 +107,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash *vm;
 };
 
 #include "threads/thread.h"

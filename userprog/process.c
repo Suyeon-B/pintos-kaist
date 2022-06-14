@@ -248,7 +248,7 @@ int process_exec(void *f_name) /* 프로세스 실행 - 실행하려는 바이�
 	char *file_name = f_name;
 	char *file_name_copy;
 	bool success;
-
+	// printf("\n\n ########## process_exec start ########## \n\n");
 	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
 
 	/* We cannot use the intr_frame in the thread structure.
@@ -287,7 +287,7 @@ int process_exec(void *f_name) /* 프로세스 실행 - 실행하려는 바이�
 
 	/* 유저 프로그램이 실행되기 전에 스택에 인자 저장 */
 	argument_stack(token_count, arg_list, &_if);
-
+	// printf("\n\n ########## argument_stack End ########## \n\n");
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);  - for debug
 	/* Start switched process. */
 	do_iret(&_if); /* 유저 프로그램 실행 */
@@ -462,7 +462,7 @@ load(const char *file_name, struct intr_frame *if_)
 	off_t file_ofs;
 	bool success = false;
 	int i;
-
+	// printf("\n\n ########## LOAD Start ########## \n\n");
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create(); /* 유저 프로세스의 페이지 테이블 생성 */
 	if (t->pml4 == NULL)
@@ -540,25 +540,28 @@ load(const char *file_name, struct intr_frame *if_)
 					zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
 				}
 				/* 배치 정보를 통해 파일을 메모리에 탑재 */
-				if (!load_segment(file, file_page, (void *)mem_page,
-								  read_bytes, zero_bytes, writable))
+				if (!load_segment(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable)) {
 					goto done;
+				}
 			}
 			else
 				goto done;
 			break;
 		}
 	}
-
+	
 	/* Set up stack. */
 	if (!setup_stack(if_)) //진입점을 초기화하기 위한 코드(스택 진입점)
 		goto done;
-
+		
+	// printf("\n\n### load ####\n\n");
+	
 	/* Start address. */
 	if_->rip = ehdr.e_entry; //
 
 	success = true;
-
+	
+	// printf("\n\n ########## LOAD End ########## \n\n");
 done:
 	/* We arrive here whether the load is successful or not. */
 	return success;
@@ -639,6 +642,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
 
+	
 	file_seek(file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
@@ -718,6 +722,15 @@ install_page(void *upage, void *kpage, bool writable)
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
+static bool
+install_page(void *upage, void *kpage, bool writable)
+{
+	struct thread *t = thread_current();
+
+	/* Verify that there's not already a page at that virtual
+	 * address, then map our page there. */
+	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
+}
 
 static bool
 lazy_load_segment(struct page *page, void *aux)
@@ -725,6 +738,43 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	
+	// PJ3
+	
+	// printf("\n\n ### lazy_load_segment ### \n\n"); /* 지워 */
+	struct aux_for_lazy_load *lazy_load = (struct aux_for_lazy_load *) aux;
+	struct file *file = lazy_load->mapped_file;
+	size_t ofs = lazy_load->ofs;
+	size_t page_read_bytes = lazy_load->page_read_bytes;
+	size_t page_zero_bytes = lazy_load->page_zero_bytes;
+	bool writable = lazy_load->writable;
+	
+	file_seek(file, ofs);
+	
+	if (file_read(file, page->frame->kva, page_read_bytes) != (int)page_read_bytes) {
+		// palloc_free_page(page->frame->kva);
+		return false;
+	}
+	
+	memset(page->frame->kva + page_read_bytes, 0, page_zero_bytes);
+	
+	return true;
+	
+	// PJ3
+	// lazy_load_segment 전에 page_fault가 먼저 발생하여 vm_try_handle_fault가 발생하는데
+	// 이 때 vm_do_claim_page로 인해 install_page를 이미 한다.
+	// if (!install_page(page->va, page->frame->kva, writable)) {
+	// 	free(lazy_load);
+	// 	printf("fail\n");
+	// 	return ;
+	// }
+	
+	
+	// PJ3
+	// file_read라던가 file_write가 들어갈 것 같음.
+	// 위 함수를 실행하기 위한 정보들이 aux로 넘겨져야 하지 않을까?
+	// struct file *file = aux->mapped_file;
+	// off_t ofs = aux->ofs;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -745,28 +795,44 @@ static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
+	// printf("\n\n ########## load_segment ########## \n\n"); /* 지워 */
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
-
+	
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		// File로부터 read_bytes만큼 읽고, 나머지 남은 page_zero_bytes는 각 바이트들을 0으로 만든다.
+		
+		// PJ3
+		// 읽으려는 바이트 수가 PGSIZE(4KB)보다 작으면 읽으려는 만큼만 읽게,
+		// 크면 PGSIZE만큼만 읽게 한다.
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
+		// PJ3
+		struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)malloc(sizeof (struct aux_for_lazy_load));
+		aux->mapped_file = file;
+		aux->ofs = ofs;
+		aux->page_read_bytes = page_read_bytes;
+		aux->page_zero_bytes = page_zero_bytes;
+		aux->upage = upage;
+		aux->writable = writable;
+		
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux)) {
+			free(aux);
 			return false;
-
+		}
+			
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -782,13 +848,55 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-
+	
+	// PJ3
+	// vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true);
+	// success = vm_claim_page(stack_bottom);
+	
+	// printf("\n\n ########## setup_stack ########## \n\n");
+	if (!vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true)) {
+		// printf("\n\n### vm_alloc_page ####\n\n");
+		return false;
+	}
+	
+	success = vm_claim_page(stack_bottom);
+	
+	if (success) {
+		if_->rsp = USER_STACK;
+	}
+	
 	return success;
+	// struct page *stack_page = (struct page *)malloc(sizeof (struct page));
+	// stack_page->va = stack_bottom;
+	
+	// success = vm_claim_page(stack_page->va);
+	// if (success) {
+	// 	if_->rsp = USER_STACK;
+	// } else {
+	// 	vm_dealloc_page(stack_page);
+	// }
+	
+	// // vm_alloc_page_with_initializer(VM_MARKER_0, stack_page->va, true, lazy_load_segment, NULL);
+	// uninit_new(page, stack_bottom, lazy_load_segment, NULL, VM_MARKER_0, anon_initializer);
+	// success = vm_alloc_page_with_initializer(VM_MARKER_0, stack_bottom, true, lazy_load_segment, NULL);
+	
+	// if (success) {
+	// 	if_->rsp = USER_STACK;
+	// } else {
+	// 	struct supplemental_page_table *spt = &thread_current()->spt;
+	// 	struct page *stack_page = spt_find_page(&spt, stack_bottom);
+		
+	// 	spt_remove_page(&spt, stack_page);
+	// }
+	// return success;
+	
+	
 }
 #endif /* VM */
 
 void argument_stack(int argc, char **argv, struct intr_frame *if_)
 {
+	// printf("\n\n ########## argument_stack start ########## \n\n");
 	/*
 	argv : 프로그램 이름과 인자가 저장되어 있는 메모리 공간
 	argc : 인자의 개수
