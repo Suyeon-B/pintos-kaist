@@ -720,28 +720,35 @@ install_page(void *upage, void *kpage, bool writable)
  * upper block. */
 
 static bool
-lazy_load_segment(struct page *upage, void *aux)
+lazy_load_segment(struct page *page, void *aux)
 {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	/* Load this page. */
+	// printf("\n\nlazy_load_segment\n\n"); /* 지워 */
 	struct aux_for_lazy_load *lazy_load = (struct aux_for_lazy_load *)aux;
+	struct file *file = lazy_load->load_file;
+	size_t offset = lazy_load->offset;
+	size_t read_bytes = lazy_load->read_bytes;
+	size_t zero_bytes = lazy_load->zero_bytes;
+	bool writable = lazy_load->writable;
 
-	file_seek(lazy_load->load_file, lazy_load->offset);
-	if (file_read(lazy_load->load_file, lazy_load, lazy_load->read_bytes) != (int)lazy_load->read_bytes)
+	file_seek(file, offset);
+	if (file_read(file, page->frame->kva, read_bytes) != (int)read_bytes)
 	{
-		palloc_free_page(lazy_load);
+		free(lazy_load);
 		return false;
 	}
-	memset(lazy_load + lazy_load->read_bytes, 0, lazy_load->zero_bytes);
+	memset(page->frame->kva + read_bytes, 0, zero_bytes);
 	/* Add the page to the process's address space. */
-	if (!install_page(upage, lazy_load, lazy_load->writable))
+	if (!install_page(page->va, page->frame->kva, writable))
 	{
 		printf("fail\n");
-		palloc_free_page(lazy_load);
+		free(lazy_load);
 		return false;
 	}
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -791,6 +798,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		/* 최초 페이지의 타입을 어떻게, 어디서 VM_MARKER_0로 설정해줄까? */
+		// printf("\n\nhihihihihihihihi\n\n"); /* 지워 */
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux))
 		{
 			return false;
@@ -808,6 +816,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack(struct intr_frame *if_)
 {
+	printf("\n\nsetup_stack\n\n");
 	bool success = false;
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
 
@@ -815,18 +824,31 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-	struct page *page = palloc_get_page(PAL_USER);
-	if (page != NULL)
+	// struct page *page = palloc_get_page(PAL_USER);
+	// if (page != NULL)
+	// {
+	// 	success = vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true); /* 수상함 */
+	// 	if (success)
+	// 	{
+	// 		if_->rsp = stack_bottom;
+	// 	}
+	// 	else
+	// 	{
+	// 		palloc_free_page(page);
+	// 	}
+	// }
+
+	// return success;
+	if (!vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true))
 	{
-		success = vm_alloc_page_with_initializer(VM_MARKER_0, page, true, load_segment, NULL); /* 수상함 */
-		if (success)
-		{
-			if_->rsp = stack_bottom;
-		}
-		else
-		{
-			palloc_free_page(page);
-		}
+		return false;
+	}
+
+	success = vm_claim_page(stack_bottom);
+
+	if (success)
+	{
+		if_->rsp = USER_STACK;
 	}
 
 	return success;

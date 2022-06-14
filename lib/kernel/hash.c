@@ -452,7 +452,7 @@ struct page *page_lookup(const void *va)
 	struct page *page;
 	struct hash_elem *hash_elem;
 
-	page->va = va;
+	page->va = pg_round_down(va);
 	hash_elem = hash_find(&thread_current()->spt.vm, &page->hash_elem);
 
 	return hash_elem != NULL ? hash_entry(hash_elem, struct page, hash_elem) : NULL;

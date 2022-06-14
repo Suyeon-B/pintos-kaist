@@ -12,6 +12,7 @@ void process_activate(struct thread *next);
 void argument_stack(int argc, char **argv, struct intr_frame *if_);
 
 // file descriptor
+static bool install_page(void *upage, void *kpage, bool writable);
 int add_file_to_fdt(struct file *file);
 struct file *process_get_file(int fd);
 void remove_file_from_fdt(int fd);
