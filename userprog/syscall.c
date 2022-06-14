@@ -110,6 +110,8 @@ void check_address(const uint64_t *addr)
 	{
 		exit(-1);
 	}
+	/*addr이 vm_entry에 존재하면 vm_entry를 반환하도록 코드 작성 */
+	/*find_vme() 사용*/
 }
 
 /* PintOS를 종료시킨다. */

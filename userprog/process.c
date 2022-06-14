@@ -785,18 +785,16 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		/* page fault 시에만 lazy load */
 		aux->load_file = file;
 		aux->offset = ofs;
-		aux->read_bytes = (int)page_read_bytes;
+		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
 		aux->writable = writable;
 
-		// if (!vm_claim_page(upage)) /* page fault가 발생할 때 load */
-		// {
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
+		/* 최초 페이지의 타입을 어떻게, 어디서 VM_MARKER_0로 설정해줄까? */
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux))
 		{
 			return false;
 		}
-		// }
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -805,7 +803,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	}
 	return true;
 }
-
+// #endif /* VM */
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack(struct intr_frame *if_)
@@ -817,6 +815,19 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+	struct page *page = palloc_get_page(PAL_USER);
+	if (page != NULL)
+	{
+		success = vm_alloc_page_with_initializer(VM_MARKER_0, page, true, load_segment, NULL); /* 수상함 */
+		if (success)
+		{
+			if_->rsp = stack_bottom;
+		}
+		else
+		{
+			palloc_free_page(page);
+		}
+	}
 
 	return success;
 }

@@ -6,9 +6,9 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
-// #ifdef VM
+#ifdef VM
 #include "vm/vm.h"
-// #endif
+#endif
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -113,7 +113,7 @@ struct thread
 	int nice; /* for aging */
 	int recent_cpu;
 	struct list_elem allelem; /* 모든 thread의 recent_cpu와 priority값 재계산하기 위함 */
-							  /* ---------------------------------------------------------- */
+	/* ---------------------------------------------------------- */
 
 	/* --- PROJECT 2 : system call ------------------------------ */
 	// #ifdef USERPROG
@@ -129,13 +129,13 @@ struct thread
 	int next_fd; /* fd idx */
 	struct file *running_file;
 	uint64_t *pml4; /* Page map level 4 */
-					/* ---------------------------------------------------------- */
-					// #endif
-					// #ifdef VM
+/* ---------------------------------------------------------- */
+// #endif
+#ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 	struct hash vm;
-	// #endif
+#endif
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;		  /* Detects stack overflow. */
 };

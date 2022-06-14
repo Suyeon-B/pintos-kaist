@@ -121,7 +121,6 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
 	hash_delete(&spt->vm, &page->hash_elem);
 	vm_dealloc_page(page);
-	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -164,9 +163,7 @@ vm_get_frame(void)
 	if (frame)
 	{
 		frame->kva = palloc_get_page(PAL_USER);
-		// printf("11111111111111\n");
 		frame->page == NULL;
-		// printf("22222222222222\n");
 	}
 	if (!frame->kva)
 	{
@@ -175,7 +172,6 @@ vm_get_frame(void)
 	/* swap in swap out */
 	/* frame 할당 실패 시 */
 	ASSERT(frame != NULL);
-	// printf("333333333333333\n");
 	ASSERT(frame->page == NULL);
 
 	return frame;
@@ -197,12 +193,23 @@ vm_handle_wp(struct page *page UNUSED)
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
-	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
-	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
+	/* vaild 체크 후 invalid하다면 Kill */
+	/* 여기서 바로 process_exit->supplemental_page_table_kill로 이어짐 */
+	// check_adress(addr);
+	if (addr = NULL || !(is_user_vaddr(addr)) ||
+			   pml4_get_page(thread_current()->pml4, addr) == NULL)
+	{
+		exit(-1);
+	}
 
-	return vm_do_claim_page(page);
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+
+	/* fault난 주소의 page가 존재하는지 확인 */
+	/* 없다면 해당 page에 대한 frame 할당 */
+	if (!page)
+	{
+		return vm_do_claim_page(page);
+	}
 }
 
 /* Free the page.
