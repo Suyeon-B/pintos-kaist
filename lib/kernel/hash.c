@@ -430,7 +430,7 @@ remove_elem(struct hash *h, struct hash_elem *e)
 }
 
 /* --- PROJECT 3 : VM ------------------------------------ */
-/* Returns a hash value for page p. */
+/* helper functions for hash table */
 unsigned
 page_hash(const struct hash_elem *p_, void *aux)
 {
@@ -438,7 +438,7 @@ page_hash(const struct hash_elem *p_, void *aux)
 	return hash_bytes(&page->va, sizeof page->va);
 }
 
-/*  */
+/* hash_less func - compare va */
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 {
 	const struct page *page_a = hash_entry(a, struct page, hash_elem);
@@ -447,13 +447,14 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 	return page_a->va < page_b->va;
 }
 
+/* get page with va */
 struct page *page_lookup(const void *va)
 {
-	struct page *page;
+	struct page page;
 	struct hash_elem *hash_elem;
 
-	page->va = pg_round_down(va);
-	hash_elem = hash_find(&thread_current()->spt.vm, &page->hash_elem);
+	page.va = pg_round_down(va);
+	hash_elem = hash_find(&thread_current()->spt.vm, &page.hash_elem);
 
 	return hash_elem != NULL ? hash_entry(hash_elem, struct page, hash_elem) : NULL;
 }

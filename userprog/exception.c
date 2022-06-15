@@ -121,10 +121,10 @@ kill(struct intr_frame *f)
 static void
 page_fault(struct intr_frame *f)
 {
-	bool not_present; /* True: not-present page, false: writing r/o page. */
-	bool write;		  /* True: access was write, false: access was read. */
-	bool user;		  /* True: access by user, false: access by kernel. */
-	void *fault_addr; /* Fault address. */
+	bool not_present; /* True: not-present page, false: writing r/o page. */ /* 지워 - 이거 언제 쓸까? */
+	bool write;																 /* True: access was write, false: access was read. */
+	bool user;																 /* True: access by user, false: access by kernel. */
+	void *fault_addr;														 /* Fault address. */
 
 	/* Obtain faulting address, the virtual address that was
 	   accessed to cause the fault.  It may point to code or to
@@ -146,7 +146,6 @@ page_fault(struct intr_frame *f)
 	// exit(-1);
 
 #ifdef VM
-	// printf("\n\npage_fault 핸들러 가기 직전 여기 들어가니??\n\n"); /* 지워 */
 	/* For project 3 and later. */
 	if (vm_try_handle_fault(f, fault_addr, user, write, not_present))
 		return;

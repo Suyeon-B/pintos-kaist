@@ -28,7 +28,6 @@ void uninit_new(struct page *page, void *va, vm_initializer *init,
 				bool (*initializer)(struct page *, enum vm_type, void *))
 {
 	ASSERT(page != NULL);
-	// printf("\n\nuninit_new 너도 보자 제발 나와줘\n\n"); /* 지워 */
 	*page = (struct page){
 		.operations = &uninit_ops,
 		.va = va,

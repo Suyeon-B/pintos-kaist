@@ -5,6 +5,7 @@
     "syscall.h": "c",
     "inspect.h": "c",
     "vaddr.h": "c",
-    "intrinsic.h": "c"
+    "intrinsic.h": "c",
+    "mmu.h": "c"
   }
 }

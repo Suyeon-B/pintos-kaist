@@ -102,7 +102,7 @@ uint64_t hash_int(int);
 /* --- PROJECT 3 : VM ------------------------------------ */
 unsigned page_hash(const struct hash_elem *p_, void *aux);
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
-
+struct page *page_lookup(const void *va);
 /* ------------------------------------------------------- */
 
 #endif /* lib/kernel/hash.h */
