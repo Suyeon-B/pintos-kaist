@@ -14,6 +14,8 @@
 #include "userprog/process.h"
 #include "kernel/stdio.h"
 #include "threads/palloc.h"
+/* --- PROJECT 3 : vm ------------------------------ */
+#include "include/vm/vm.h"
 
 /* System call.
  *
@@ -105,13 +107,11 @@ void syscall_handler(struct intr_frame *f UNUSED)
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
 void check_address(const uint64_t *addr)
 {
-	if (addr = NULL || !(is_user_vaddr(addr)) ||
-			   pml4_get_page(thread_current()->pml4, addr) == NULL)
+	if (addr = NULL || !(is_user_vaddr(addr)) || !pml4_get_page(thread_current()->pml4, addr))
 	{
 		exit(-1);
 	}
-	/*addr이 vm_entry에 존재하면 vm_entry를 반환하도록 코드 작성 */
-	/*find_vme() 사용*/
+	// return spt_find_page(&thread_current()->spt, addr);
 }
 
 /* PintOS를 종료시킨다. */

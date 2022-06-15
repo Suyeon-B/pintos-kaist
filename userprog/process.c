@@ -704,7 +704,7 @@ setup_stack(struct intr_frame *if_)
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
-#else  /* 이거 원래 이 함수 밑에있었음 */
+
 static bool
 install_page(void *upage, void *kpage, bool writable)
 {
@@ -714,7 +714,7 @@ install_page(void *upage, void *kpage, bool writable)
 	 * address, then map our page there. */
 	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
 }
-
+#else  /* 이거 원래 이 함수 밑에있었음 */
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
@@ -726,28 +726,22 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	/* Load this page. */
-	// printf("\n\nlazy_load_segment\n\n"); /* 지워 */
 	struct aux_for_lazy_load *lazy_load = (struct aux_for_lazy_load *)aux;
 	struct file *file = lazy_load->load_file;
-	size_t offset = lazy_load->offset;
+	off_t offset = lazy_load->offset;
 	size_t read_bytes = lazy_load->read_bytes;
 	size_t zero_bytes = lazy_load->zero_bytes;
 	bool writable = lazy_load->writable;
 
 	file_seek(file, offset);
-	if (file_read(file, page->frame->kva, read_bytes) != (int)read_bytes)
+	if (file_read(file, page->frame->kva, read_bytes) != (off_t)read_bytes)
 	{
-		free(lazy_load);
+		// free(lazy_load); 그럼 이거 프리 언제하지
+		// palloc_free_page(page->frame->kva);
 		return false;
 	}
 	memset(page->frame->kva + read_bytes, 0, zero_bytes);
-	/* Add the page to the process's address space. */
-	if (!install_page(page->va, page->frame->kva, writable))
-	{
-		printf("fail\n");
-		free(lazy_load);
-		return false;
-	}
+
 	return true;
 }
 
@@ -798,9 +792,9 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		/* 최초 페이지의 타입을 어떻게, 어디서 VM_MARKER_0로 설정해줄까? */
-		// printf("\n\nhihihihihihihihi\n\n"); /* 지워 */
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux))
 		{
+			free(aux);
 			return false;
 		}
 
@@ -808,50 +802,32 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes; // 집가자
 	}
 	return true;
 }
-// #endif /* VM */
+
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack(struct intr_frame *if_)
 {
-	printf("\n\nsetup_stack\n\n");
-	bool success = false;
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
 
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-	// struct page *page = palloc_get_page(PAL_USER);
-	// if (page != NULL)
-	// {
-	// 	success = vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true); /* 수상함 */
-	// 	if (success)
-	// 	{
-	// 		if_->rsp = stack_bottom;
-	// 	}
-	// 	else
-	// 	{
-	// 		palloc_free_page(page);
-	// 	}
-	// }
-
-	// return success;
-	if (!vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true))
+	// 집가자
+	if (vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true))
 	{
-		return false;
+		if (vm_claim_page(stack_bottom))
+		{
+			if_->rsp = USER_STACK;
+			// thread_current()->stack_bottom = stack_bottom; // 이거 추가
+			return true;
+		}
 	}
-
-	success = vm_claim_page(stack_bottom);
-
-	if (success)
-	{
-		if_->rsp = USER_STACK;
-	}
-
-	return success;
+	return false;
 }
 #endif /* VM */
 
@@ -862,77 +838,42 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
 	argc : 인자의 개수
 	if_ : 스택 포인터를 가리키는 주소 값을 저장할 intr_frame
 	*/
-	char *arg_address[128]; //총 128개 저장가능
+	int i;
+	char *argu_addr[128];
+	int argc_len;
 
-	/* 프로그램 이름 및 인자(문자열) push */
-	for (int k = argc - 1; k >= 0; k--) //뒤에서 부터 넣어주기
+	for (i = argc - 1; i >= 0; i--)
 	{
-		int argv_len = strlen(argv[k]);
-		if_->rsp = if_->rsp - (argv_len + 1);
-		memcpy(if_->rsp, argv[k], argv_len + 1); //메모리 카피해 주기
-		arg_address[k] = if_->rsp;				 //해당 메모리 저장
+		argc_len = strlen(argv[i]);
+		if_->rsp = if_->rsp - (argc_len + 1);
+		memcpy(if_->rsp, argv[i], (argc_len + 1));
+		argu_addr[i] = if_->rsp;
 	}
 
-	/* Insert padding for word-align */
-	/* ! 여기 8바이트 정렬 다르고, memset쓴 거 다름 */
-	while (if_->rsp % 16 != 0)
+	while (if_->rsp % 8 != 0)
 	{
 		if_->rsp--;
-		*(uint8_t *)(if_->rsp) = 0;
+		memset(if_->rsp, 0, sizeof(uint8_t));
+	}
+
+	for (i = argc; i >= 0; i--)
+	{
+		if_->rsp = if_->rsp - 8;
+		if (i == argc)
+		{
+			memset(if_->rsp, 0, sizeof(char **));
+		}
+		else
+		{
+			memcpy(if_->rsp, &argu_addr[i], sizeof(char **));
+		}
 	}
 
 	if_->rsp = if_->rsp - 8;
-	*(int8_t *)if_->rsp = 0;
+	memset(if_->rsp, 0, sizeof(void *));
 
-	/* 프로그램 이름 및 인자 주소들 push */
-	for (int i = argc - 1; i >= 0; i--)
-	{
-		if_->rsp = if_->rsp - 8;
-		memcpy(if_->rsp, &arg_address[i], sizeof(char **));
-	}
-
-	/* fake addr 0 넣어주기 */
-	if_->rsp = if_->rsp - 16;
-	*(int8_t *)if_->rsp = 0;
-
-	if_->R.rdi = argc;			/* 문자열의 개수 저장 */
-	if_->R.rsi = if_->rsp + 16; /*  문자열을 가리키는 주소들의 배열을 가리킴 */
-								// int i;
-								// char *argu_addr[128];
-								// int argc_len;
-
-	// for (i = argc - 1; i >= 0; i--)
-	// {
-	// 	argc_len = strlen(argv[i]);
-	// 	if_->rsp = if_->rsp - (argc_len + 1);
-	// 	memcpy(if_->rsp, argv[i], (argc_len + 1));
-	// 	argu_addr[i] = if_->rsp;
-	// }
-
-	// while (if_->rsp % 8 != 0)
-	// {
-	// 	if_->rsp--;
-	// 	memset(if_->rsp, 0, sizeof(uint8_t));
-	// }
-
-	// for (i = argc; i >= 0; i--)
-	// {
-	// 	if_->rsp = if_->rsp - 8;
-	// 	if (i == argc)
-	// 	{
-	// 		memset(if_->rsp, 0, sizeof(char **));
-	// 	}
-	// 	else
-	// 	{
-	// 		memcpy(if_->rsp, &argu_addr[i], sizeof(char **));
-	// 	}
-	// }
-
-	// if_->rsp = if_->rsp - 8;
-	// memset(if_->rsp, 0, sizeof(void *));
-
-	// if_->R.rdi = argc;
-	// if_->R.rsi = if_->rsp + 8;
+	if_->R.rdi = argc;
+	if_->R.rsi = if_->rsp + 8;
 }
 
 /* Find available spot in fd_table, put file in  */
