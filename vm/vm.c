@@ -202,7 +202,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 		return false;
 	}
 	page = spt_find_page(spt, addr);
-	return false;
+	return vm_do_claim_page(page);
 }
 
 /* Free the page.
