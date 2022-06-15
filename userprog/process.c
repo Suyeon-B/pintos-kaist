@@ -262,6 +262,10 @@ int process_exec(void *f_name) /* 프로세스 실행 - 실행하려는 바이�
 	/* We first kill the current context */
 	process_cleanup();
 
+#ifdef VM
+	supplemental_page_table_init(&thread_current()->spt);
+#endif
+
 	/* 파싱하기 */
 	int token_count = 0;
 	char *token, *last;

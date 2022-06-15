@@ -6,6 +6,7 @@
 #include "include/threads/vaddr.h"
 #include "include/userprog/process.h"
 #include "threads/mmu.h"
+#include "include/userprog/syscall.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -80,6 +81,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 #endif
 		}
 		page->writable = writable;
+		page->type = type;
 
 		/* TODO: Insert the page into the spt. */
 		success = spt_insert_page(spt, page);
@@ -197,11 +199,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* 여기서 바로 process_exit->supplemental_page_table_kill로 이어짐 */
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
-	if (!addr || !user)
-	{
-		return false;
-	}
-	page = spt_find_page(spt, addr);
+	page = check_address(addr);
 	return vm_do_claim_page(page);
 }
 
@@ -224,16 +222,6 @@ bool vm_claim_page(void *va UNUSED)
 		return false; /* 수상함 - 예외처리하기 */
 	}
 	return vm_do_claim_page(page);
-}
-
-static bool
-install_page(void *upage, void *kpage, bool writable)
-{
-	struct thread *t = thread_current();
-
-	/* Verify that there's not already a page at that virtual
-	 * address, then map our page there. */
-	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
 }
 
 /* Claim the PAGE and set up the mmu. */
@@ -269,6 +257,37 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 								  struct supplemental_page_table *src UNUSED)
 {
+	struct hash_iterator i;
+	struct page *parent_page;
+	struct thread *child_thread = thread_current();
+	bool success = false;
+
+	hash_first(&i, &src->vm);
+	while (hash_next(&i))
+	{
+		parent_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+
+		success = vm_alloc_page_with_initializer(parent_page->uninit.type, parent_page->va, parent_page->writable, parent_page->uninit.init, parent_page->uninit.aux);
+		struct page *child_page = spt_find_page(&child_thread->spt, parent_page->va);
+
+		/* anonymous page OR file backed page */
+		if (parent_page->frame)
+		{
+			success = vm_do_claim_page(child_page);
+			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+		}
+		// printf("\n\nchild_page->va : %p\n\n", child_page->va);
+		// printf("\n\parent_page->va : %p\n\n", parent_page->va);
+	}
+	return success;
+}
+
+void *
+page_destroy(struct hash_elem *hash_elem, void *aux UNUSED)
+{
+	struct page *page = hash_entry(hash_elem, struct page, hash_elem);
+	// vm_dealloc_page(page);
+	free(page);
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -276,4 +295,5 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	// hash_destroy(&spt->vm, page_destroy);
 }

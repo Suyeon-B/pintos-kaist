@@ -62,7 +62,10 @@ uninit_initialize(struct page *page, void *kva)
 static void
 uninit_destroy(struct page *page)
 {
-	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
+	struct uninit_page *uninit UNUSED = &page->uninit;
+	struct lazy_load_info *aux = (struct lazy_load_info *)(uninit->aux);
+
+	free(aux);
 }

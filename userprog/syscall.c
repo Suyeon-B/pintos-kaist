@@ -14,6 +14,7 @@
 #include "userprog/process.h"
 #include "kernel/stdio.h"
 #include "threads/palloc.h"
+#include "include/vm/vm.h"
 
 /* System call.
  *
@@ -103,15 +104,21 @@ void syscall_handler(struct intr_frame *f UNUSED)
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
-void check_address(const uint64_t *addr)
+struct page *check_address(void *addr)
 {
+#ifdef VM
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+	if (addr = NULL || !(is_user_vaddr(addr)))
+	{
+		exit(-1);
+	}
+	return page;
+#endif
 	if (addr = NULL || !(is_user_vaddr(addr)) ||
 			   pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
 		exit(-1);
 	}
-	/*addr이 vm_entry에 존재하면 vm_entry를 반환하도록 코드 작성 */
-	/*find_vme() 사용*/
 }
 
 /* PintOS를 종료시킨다. */
@@ -226,7 +233,7 @@ int filesize(int fd)
 
 int read(int fd, void *buffer, unsigned size)
 {
-	check_address(buffer);
+	check_valid_buffer(buffer, size, true);
 	lock_acquire(&file_lock);
 
 	int read_result;
@@ -267,7 +274,7 @@ int read(int fd, void *buffer, unsigned size)
 
 int write(int fd, const void *buffer, unsigned size)
 {
-	check_address(buffer);
+	check_valid_buffer(buffer, size, false);
 	lock_acquire(&file_lock);
 
 	int write_result;
@@ -335,4 +342,20 @@ void close(int fd)
 		return;
 	}
 	process_close_file(fd);
+}
+
+void check_valid_buffer(void *buffer, unsigned size, bool is_read)
+{
+	/* 버퍼 내의 시작부터 끝까지의 각 주소를 모두 check_address*/
+	for (char i = 0; i < size; i++) /* char OR int */
+	{
+		struct page *page = check_address(buffer + i);
+
+		/* 해당 주소가 포함된 페이지가 spt에 없거나,
+		 * not writable page인 경우 */
+		if (is_read && !page->writable)
+		{
+			exit(-1);
+		}
+	}
 }

@@ -9,7 +9,7 @@ struct lock file_lock; /* proventing race condition against  */
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
-void check_address(const uint64_t *addr);
+struct page *check_address(void *addr);
 void halt(void);
 void exit(int status);
 bool create(const char *file, unsigned initial_size);
@@ -25,6 +25,7 @@ void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
 int add_file_to_fdt(struct file *file);
+void check_valid_buffer(void *buffer, unsigned size, bool is_read);
 /* ---------------------------------------------------------- */
 
 #endif /* userprog/syscall.h */

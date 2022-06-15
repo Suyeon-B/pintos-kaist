@@ -6,6 +6,7 @@
 /* --- PROJECT 3 : VM ------------------------------------ */
 #include "lib/kernel/hash.h"
 #include "threads/vaddr.h"
+#include "include/lib/string.h"
 // #include "userprog/syscall.h"
 /* ------------------------------------------------------- */
 
