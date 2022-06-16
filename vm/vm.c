@@ -59,10 +59,9 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page(spt, upage) == NULL)
 	{
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *page = (struct page *)malloc(sizeof(struct page)); /* 수상함 */
+		/* Create the page, fetch the initialier according to the VM type,
+		 * and then create "uninit" page struct by calling uninit_new. */
+		struct page *page = (struct page *)malloc(sizeof(struct page));
 		bool success = true;
 
 		switch (VM_TYPE(type))
@@ -83,7 +82,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		page->writable = writable;
 		page->type = type;
 
-		/* TODO: Insert the page into the spt. */
+		/* Insert the page into the spt. */
 		success = spt_insert_page(spt, page);
 
 		return success;
@@ -96,8 +95,6 @@ err:
 struct page *
 spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
-	/* TODO: Fill this function. */
-	/* pg_round_down()으로 vaddr의 페이지 번호를 얻음 */
 	struct page *page = page_lookup(va);
 	if (page)
 	{
@@ -166,13 +163,6 @@ vm_get_frame(void)
 	frame->kva = palloc_get_page(PAL_USER);
 	frame->page = NULL;
 
-	// if (!frame->kva)
-	// {
-	// 	// PANIC("vm_get_frame에서 palloc 실패!");
-	// 	// return vm_evict_frame(); /* 구현 전 */
-	// }
-	/* swap in swap out */
-	/* frame 할당 실패 시 */
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
 
@@ -216,10 +206,9 @@ bool vm_claim_page(void *va UNUSED)
 {
 	struct page *page = spt_find_page(&thread_current()->spt, va);
 
-	/* 주소 잘못들어오는 거 debugging 중 */
 	if (!page)
 	{
-		return false; /* 수상함 - 예외처리하기 */
+		return false;
 	}
 	return vm_do_claim_page(page);
 }
@@ -235,13 +224,9 @@ vm_do_claim_page(struct page *page)
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO
-	 * : 페이지의 VA를 프레임의 PA에 매핑하기 위해
-	 *   PTE insert */
-
-	/* 주소 잘못들어오는 거 debugging 중 */
+	/* 페이지의 VA를 프레임의 PA에 매핑하기 위해 PTE insert */
 	if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable))
-	{ /* initialize writable 초기화 했는지 확인하기 */
+	{
 		return false;
 	}
 	return swap_in(page, frame->kva);
@@ -294,7 +279,7 @@ page_destroy(struct hash_elem *hash_elem, void *aux UNUSED)
 /* Free the resource hold by the supplemental page table */
 void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
+	/* Destroy all the supplemental_page_table hold by thread and
+	 * writeback all the modified contents to the storage. */
 	hash_destroy(&spt->vm, page_destroy);
 }

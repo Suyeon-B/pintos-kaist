@@ -121,7 +121,7 @@ kill(struct intr_frame *f)
 static void
 page_fault(struct intr_frame *f)
 {
-	bool not_present; /* True: not-present page, false: writing r/o page. */ /* 지워 - 이거 언제 쓸까? */
+	bool not_present; /* True: not-present page, false: writing r/o page. */ /* TODO: 언제 사용하게 될지 모르겠음. */
 	bool write;																 /* True: access was write, false: access was read. */
 	bool user;																 /* True: access by user, false: access by kernel. */
 	void *fault_addr;														 /* Fault address. */
@@ -141,9 +141,6 @@ page_fault(struct intr_frame *f)
 	not_present = (f->error_code & PF_P) == 0;
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
-
-	// PANIC("HI :D I'm page fault~! Don't Panic~!");
-	// exit(-1);
 
 #ifdef VM
 	/* For project 3 and later. */

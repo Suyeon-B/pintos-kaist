@@ -116,7 +116,7 @@ check_address(void *addr)
 	}
 	return page;
 #else
-	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
+	if (!addr || !(is_user_vaddr(addr)) || !pml4_get_page(thread_current()->pml4, addr))
 	{
 		exit(-1);
 	}
@@ -214,7 +214,7 @@ int open(const char *file)
 		lock_release(&file_lock);
 		return -1;
 	}
-	int fd = add_file_to_fdt(open_file); // 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게
+	int fd = add_file_to_fdt(open_file); /* 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게 */
 	if (fd == -1)						 /* FDT가 다 찬 경우 */
 	{
 		file_close(open_file);
@@ -361,16 +361,3 @@ void check_valid_buffer(void *buffer, unsigned size, bool is_read)
 		}
 	}
 }
-// void check_valid_buffer(void *buffer, unsigned size, bool is_read)
-// {
-// 	// PJ3
-// 	for (int i = 0; i < size; i++)
-// 	{
-// 		struct page *page = check_address(buffer + i);
-
-// 		if (is_read && page->writable == false)
-// 		{
-// 			exit(-1);
-// 		}
-// 	}
-// }

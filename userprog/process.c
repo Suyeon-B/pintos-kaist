@@ -82,11 +82,11 @@ initd(void *f_name)
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
 	/* Clone current thread to new thread.*/
-	/* cur = 부모 프로세스(Caller)! */
+	/* cur = 부모 프로세스(Caller) */
 	struct thread *curr = thread_current();
 	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
 
-	/* 새롭게 프로세스를 하나 더 만든다. 이 자식 프로세스는 __do_fork()를 수행한다. */
+	/* 새롭게 프로세스를 하나 더 만든다. 자식 프로세스는 __do_fork()를 수행한다. */
 	tid_t tid = thread_create(name, curr->priority, __do_fork, curr);
 	if (tid == TID_ERROR)
 		return TID_ERROR;
@@ -165,7 +165,7 @@ __do_fork(void *aux)
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
-	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+	/* pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
@@ -202,7 +202,7 @@ __do_fork(void *aux)
 	}
 
 	/* 부모의 FDT 복사 */
-	for (int i = 0; i < FD_LIMIT; i++)
+	for (int i = 2; i < FD_LIMIT; i++)
 	{ /* ! 여기 0이 아니라 2부터도 돌려보기 */
 		struct file *file = parent->fdt[i];
 		if (file == NULL)
@@ -708,7 +708,7 @@ setup_stack(struct intr_frame *if_)
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
-#else  /* 이거 원래 이 함수 밑에있었음 */
+
 static bool
 install_page(void *upage, void *kpage, bool writable)
 {
@@ -718,7 +718,7 @@ install_page(void *upage, void *kpage, bool writable)
 	 * address, then map our page there. */
 	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
 }
-
+#else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
@@ -742,15 +742,6 @@ lazy_load_segment(struct page *page, void *aux)
 		return false;
 	}
 	memset(page->frame->kva + read_bytes, 0, zero_bytes);
-	/* Add the page to the process's address space. */
-	// lazy_load_segment 전에 page_fault가 먼저 발생하여 vm_try_handle_fault가 발생하는데
-	// 이 때 vm_do_claim_page로 인해 install_page를 이미 한다.
-	// if (!install_page(page->va, page->frame->kva, writable))
-	// {
-	// 	printf("fail\n");
-	// 	free(lazy_load);
-	// 	return false;
-	// }
 	return true;
 }
 
@@ -783,8 +774,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-		/* 수연
-		 * 여기서 고민한 점
+		/* 여기서 고민한 점
 		 * 1. load_segment → vm_alloc_page_with_initializer를 통해 기대하는 결과는?
 		 * 2. upage와 kpage의 구분
 		 * 3. lazy_load_segment에 넘겨줄 aux가 뭘까
@@ -798,8 +788,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
 
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		/* 최초 페이지의 타입을 어떻게, 어디서 VM_MARKER_0로 설정해줄까? */
+		/* Set up aux to pass information to the lazy_load_segment. */
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux))
 		{
 			free(aux);
@@ -893,7 +882,7 @@ int add_file_to_fdt(struct file *file)
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fdt;
 
-	// file 포인터를 fd_table안에 넣을 index 찾기
+	/* file 포인터를 fd_table안에 넣을 index 찾기 */
 	while (curr->next_fd < FD_LIMIT && fdt[curr->next_fd])
 	{
 		curr->next_fd++;
