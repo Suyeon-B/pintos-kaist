@@ -94,9 +94,6 @@ struct aux_for_lazy_load
 	off_t offset;			/* 읽어야 할 파일 오프셋 */
 	size_t read_bytes;		/* 가상페이지에 쓰여져 있는 데이터 크기 */
 	size_t zero_bytes;		/* 0으로 채울 남은 페이지의 바이트 */
-	bool writable;			/* True일 경우 해당 주소에 write 가능
-								False일 경우 해당 주소에 write 불가능 */
-	bool is_loaded;			/* 물리메모리의 탑재 여부를 알려주는 플래그 */
 };
 
 /* The representation of "frame" */

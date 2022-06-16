@@ -267,7 +267,11 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 	{
 		parent_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
-		success = vm_alloc_page_with_initializer(parent_page->uninit.type, parent_page->va, parent_page->writable, parent_page->uninit.init, parent_page->uninit.aux);
+		success = vm_alloc_page_with_initializer(parent_page->uninit.type,
+												 parent_page->va,
+												 parent_page->writable,
+												 parent_page->uninit.init,
+												 parent_page->uninit.aux);
 		struct page *child_page = spt_find_page(&child_thread->spt, parent_page->va);
 
 		/* anonymous page OR file backed page */
@@ -276,8 +280,6 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			success = vm_do_claim_page(child_page);
 			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
 		}
-		// printf("\n\nchild_page->va : %p\n\n", child_page->va);
-		// printf("\n\parent_page->va : %p\n\n", parent_page->va);
 	}
 	return success;
 }
@@ -286,8 +288,7 @@ void *
 page_destroy(struct hash_elem *hash_elem, void *aux UNUSED)
 {
 	struct page *page = hash_entry(hash_elem, struct page, hash_elem);
-	// vm_dealloc_page(page);
-	free(page);
+	vm_dealloc_page(page);
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -295,5 +296,5 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	// hash_destroy(&spt->vm, page_destroy);
+	hash_destroy(&spt->vm, page_destroy);
 }

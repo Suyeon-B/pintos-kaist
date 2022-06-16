@@ -64,8 +64,11 @@ uninit_destroy(struct page *page)
 {
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
-	struct uninit_page *uninit UNUSED = &page->uninit;
-	struct lazy_load_info *aux = (struct lazy_load_info *)(uninit->aux);
+	/* aux 할당 해제 */
+	/* TODO : aux 할당 해제는 언제 해줄까? */
+	// struct uninit_page *uninit UNUSED = &page->uninit;
+	// struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)(uninit->aux);
 
-	free(aux);
+	// free(aux);
+	return;
 }

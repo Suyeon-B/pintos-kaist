@@ -735,7 +735,6 @@ lazy_load_segment(struct page *page, void *aux)
 	size_t offset = lazy_load->offset;
 	size_t read_bytes = lazy_load->read_bytes;
 	size_t zero_bytes = lazy_load->zero_bytes;
-	bool writable = lazy_load->writable;
 
 	file_seek(file, offset);
 	if (file_read(file, page->frame->kva, read_bytes) != (int)read_bytes)
@@ -798,7 +797,6 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		aux->offset = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
-		aux->writable = writable;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		/* 최초 페이지의 타입을 어떻게, 어디서 VM_MARKER_0로 설정해줄까? */

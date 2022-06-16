@@ -51,11 +51,11 @@ anon_swap_out(struct page *page)
 static void
 anon_destroy(struct page *page)
 {
-	/* frame 할당 해제 */
-	// free(page->frame);
-	// palloc_free_page(page->frame->kva);
-	struct uninit_page *uninit UNUSED = &page->uninit;
-	struct lazy_load_info *aux = (struct lazy_load_info *)(uninit->aux);
+	// /* aux 할당 해제 */
+	/* TODO : aux 할당 해제는 언제 해줄까? */
+	// struct uninit_page *uninit UNUSED = &page->uninit;
+	// struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)(uninit->aux);
 
-	free(aux);
+	// free(aux);
+	free(page->frame); /* frame 할당 해제 */
 }
