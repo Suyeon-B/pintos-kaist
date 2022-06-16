@@ -104,21 +104,23 @@ void syscall_handler(struct intr_frame *f UNUSED)
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
-struct page *check_address(void *addr)
+struct page *
+check_address(void *addr)
 {
 #ifdef VM
 	struct page *page = spt_find_page(&thread_current()->spt, addr);
-	if (addr = NULL || !(is_user_vaddr(addr)))
+
+	if (!addr || !(is_user_vaddr(addr)) || !page)
 	{
 		exit(-1);
 	}
 	return page;
-#endif
-	if (addr = NULL || !(is_user_vaddr(addr)) ||
-			   pml4_get_page(thread_current()->pml4, addr) == NULL)
+#else
+	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
 		exit(-1);
 	}
+#endif
 }
 
 /* PintOS를 종료시킨다. */
@@ -359,3 +361,16 @@ void check_valid_buffer(void *buffer, unsigned size, bool is_read)
 		}
 	}
 }
+// void check_valid_buffer(void *buffer, unsigned size, bool is_read)
+// {
+// 	// PJ3
+// 	for (int i = 0; i < size; i++)
+// 	{
+// 		struct page *page = check_address(buffer + i);
+
+// 		if (is_read && page->writable == false)
+// 		{
+// 			exit(-1);
+// 		}
+// 	}
+// }
