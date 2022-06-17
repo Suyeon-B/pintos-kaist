@@ -134,7 +134,7 @@ struct thread
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 	struct hash vm;
-	uintptr_t rsp; /* for stack growth */
+	void *rsp; /* for stack growth */
 #endif
 	uint64_t *pml4;		  /* Page map level 4 */
 	struct intr_frame tf; /* Information for switching */

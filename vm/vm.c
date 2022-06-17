@@ -81,7 +81,6 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		}
 		page->writable = writable;
 		page->type = type;
-		page->is_loaded = false;
 
 		/* Insert the page into the spt. */
 		success = spt_insert_page(spt, page);
@@ -173,22 +172,13 @@ vm_get_frame(void)
 /* Growing the stack. */
 bool vm_stack_growth(void *addr UNUSED)
 {
-	/* addr에 해당하는 주소범위에서 frame을 할당받도록한다. (최대 1MB) */
-	struct thread *curr = thread_current();
-
 	if (!vm_alloc_page(VM_ANON, pg_round_down(addr), true))
 	{
 		return false;
 	}
 
-	if (vm_claim_page(addr))
-	{
-		curr->rsp = curr->tf.rsp;
-	}
-	// /* page 가져옴 */
-	// struct page *page = spt_find_page(&curr->spt, addr); /* TODO : & check */
-	// /* stack growth */
-	// return vm_do_claim_page(page);
+	thread_current()->rsp = thread_current()->tf.rsp;
+	return true;
 }
 
 /* Handle the fault on write_protected page */
@@ -202,26 +192,14 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
 	/* TODO : 여기서 intr_frame *f는 왜 필요한가? */
-	struct thread *curr = thread_current();
-	struct page *page;
-
 	/* addr가 stack growth요청인 경우 (page X, frame X)
 	 * - 이미 page가 할당된 주소가 아님을 보장해야함
 	 *
 	 * vaildity 체크 후 invalid하다면,
 	 * process_exit->supplemental_page_table_kill */
-	if (!user)
-	{
-		return false;
-	}
-
-	page = check_address(addr);
-	if (page)
-	{
-		/* addr가 단순 frame연결 요청인 경우 (page O, frame X) */
-		return vm_do_claim_page(page);
-	}
-	return false;
+	struct page *page = check_address(addr);
+	/* addr가 단순 frame연결 요청인 경우 (page O, frame X) */
+	return vm_do_claim_page(page);
 }
 
 /* Free the page.
@@ -249,6 +227,10 @@ bool vm_claim_page(void *va UNUSED)
 static bool
 vm_do_claim_page(struct page *page)
 {
+	if (!page)
+	{
+		return false;
+	}
 	struct frame *frame = vm_get_frame();
 
 	/* Set links */
@@ -260,8 +242,6 @@ vm_do_claim_page(struct page *page)
 	{
 		return false;
 	}
-	/* load flag */
-	page->is_loaded = true;
 	return swap_in(page, frame->kva);
 }
 

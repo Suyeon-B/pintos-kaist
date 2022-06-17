@@ -115,10 +115,12 @@ check_address(void *addr)
 
 	if (!addr || !(is_user_vaddr(addr)) || !page)
 	{
-		if (!page && addr >= thread_current()->rsp - 8 && addr < thread_current()->rsp)
+		if (!page && (addr >= thread_current()->rsp - 8 && addr < thread_current()->rsp) || (addr < thread_current()->rsp && addr >= USER_STACK - (1 << 20)))
 		{
-			vm_stack_growth(addr);
-			return spt_find_page(&thread_current()->spt, addr);
+			if (vm_stack_growth(addr))
+			{
+				return spt_find_page(&thread_current()->spt, addr);
+			}
 		}
 		exit(-1);
 	}
