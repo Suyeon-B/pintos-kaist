@@ -53,7 +53,7 @@ struct page
 	struct frame *frame; /* Back reference for frame */
 
 	/* --- PROJECT 3 : VM ------------------------------------ */
-	uint8_t type;	/* VM_BIN, VM_FILE, VM_ANON의 타입 */
+	uint8_t type;	/* VM_UNINIT, VM_FILE, VM_ANON의 타입 */
 	void *va;		/* page가 관리하는 가상페이지 번호 */
 	bool writable;	/* True일 경우 해당 주소에 write 가능
 						False일 경우 해당 주소에 write 불가능 */

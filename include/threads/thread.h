@@ -113,10 +113,10 @@ struct thread
 	int nice; /* for aging */
 	int recent_cpu;
 	struct list_elem allelem; /* 모든 thread의 recent_cpu와 priority값 재계산하기 위함 */
-	/* ---------------------------------------------------------- */
+/* ---------------------------------------------------------- */
 
-	/* --- PROJECT 2 : system call ------------------------------ */
-	// #ifdef USERPROG
+/* --- PROJECT 2 : system call ------------------------------ */
+#ifdef USERPROG
 	int exit_status;			 /* exit 호출 시 종료 status */
 	struct intr_frame parent_if; /* 부모의 interrupt frame - fork */
 	struct list children_list;	 /* 자식 리스트 */
@@ -124,18 +124,19 @@ struct thread
 	struct semaphore sema_exit;	 /* exit 세마포어 */
 	struct semaphore sema_wait;	 /* wait 세마포어 */
 	struct semaphore sema_fork;	 /* fork 세마포어 */
-								 /* file descriptor */
-	struct file **fdt;
-	int next_fd; /* fd idx */
+
+	struct file **fdt; /* file descriptor */
+	int next_fd;	   /* fd idx */
 	struct file *running_file;
-	uint64_t *pml4; /* Page map level 4 */
 /* ---------------------------------------------------------- */
-// #endif
+#endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 	struct hash vm;
+	uintptr_t rsp; /* for stack growth */
 #endif
+	uint64_t *pml4;		  /* Page map level 4 */
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;		  /* Detects stack overflow. */
 };

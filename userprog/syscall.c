@@ -49,6 +49,9 @@ void syscall_init(void)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
+	/* for stack growth */
+	thread_current()->rsp = f->rsp;
+
 	switch (f->R.rax) /* rax : system call number */
 	{
 	/* Projects 2 and later.
@@ -112,6 +115,11 @@ check_address(void *addr)
 
 	if (!addr || !(is_user_vaddr(addr)) || !page)
 	{
+		if (!page && addr < thread_current()->rsp - 8)
+		{
+			vm_stack_growth(addr);
+			return spt_find_page(&thread_current()->spt, addr);
+		}
 		exit(-1);
 	}
 	return page;
