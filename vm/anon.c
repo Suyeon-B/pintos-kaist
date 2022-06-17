@@ -31,6 +31,10 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	
+	// PJ3
+	anon_page->type = type;
+	// printf("\n\n ### 'hi'%d ### \n\n", page->uninit.type); /* 지워 */
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -49,4 +53,8 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	// PJ3
+	// free(anon_page->aux);
+	// palloc_free_page(page->frame->kva);
+	free(page->frame);
 }

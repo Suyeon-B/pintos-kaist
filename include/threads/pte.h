@@ -21,11 +21,11 @@
 #define PDPESHIFT 30UL
 #define PDXSHIFT  21UL
 #define PTXSHIFT  12UL
-
-#define PML4(la)  ((((uint64_t) (la)) >> PML4SHIFT) & 0x1FF)
-#define PDPE(la) ((((uint64_t) (la)) >> PDPESHIFT) & 0x1FF)
-#define PDX(la)  ((((uint64_t) (la)) >> PDXSHIFT) & 0x1FF)
-#define PTX(la)  ((((uint64_t) (la)) >> PTXSHIFT) & 0x1FF)
+                                                                  // PJ3
+#define PML4(la)  ((((uint64_t) (la)) >> PML4SHIFT) & 0x1FF)      // Page-Map-Level-4 Offset을 읽는다.
+#define PDPE(la) ((((uint64_t) (la)) >> PDPESHIFT) & 0x1FF)       // Page-Directory Pointer를 읽어서 반환한다.
+#define PDX(la)  ((((uint64_t) (la)) >> PDXSHIFT) & 0x1FF)        // Page-Directory Offset을 읽어서 반환한다.
+#define PTX(la)  ((((uint64_t) (la)) >> PTXSHIFT) & 0x1FF)        // Page-Table Offset을 읽어서 반환한다.
 #define PTE_ADDR(pte) ((uint64_t) (pte) & ~0xFFF)
 
 /* The important flags are listed below.
