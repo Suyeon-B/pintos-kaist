@@ -115,7 +115,7 @@ check_address(void *addr)
 
 	if (!addr || !(is_user_vaddr(addr)) || !page)
 	{
-		if (!page && addr < thread_current()->rsp - 8)
+		if (!page && addr >= thread_current()->rsp - 8 && addr < thread_current()->rsp)
 		{
 			vm_stack_growth(addr);
 			return spt_find_page(&thread_current()->spt, addr);

@@ -210,6 +210,11 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	 *
 	 * vaildity 체크 후 invalid하다면,
 	 * process_exit->supplemental_page_table_kill */
+	if (!user)
+	{
+		return false;
+	}
+
 	page = check_address(addr);
 	if (page)
 	{
