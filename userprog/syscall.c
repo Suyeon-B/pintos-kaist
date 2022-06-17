@@ -14,6 +14,7 @@
 #include "userprog/process.h"
 #include "kernel/stdio.h"
 #include "threads/palloc.h"
+#include "include/vm/vm.h"
 
 /* System call.
  *
@@ -103,16 +104,60 @@ void syscall_handler(struct intr_frame *f UNUSED)
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
-void check_address(const uint64_t *addr)
-{
+// void check_address(const uint64_t *addr)
+// {
+// 	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
+// 	{
+// 		exit(-1);
+// 	}
+// }
+
+// PJ3
+struct page *
+check_address (void *addr) {
+#ifdef VM
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+
+	if (!addr || !(is_user_vaddr(addr)) || !page) {
+		exit(-1);
+		// return;
+	}
+	
+	return page;
+#else
 	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
 		exit(-1);
+		// return;
 	}
+#endif
 }
 
-// PJ3
+// struct page *
+// check_address (void *addr) {
+// 	if (addr == NULL || is_kernel_vaddr(addr)) {
+// 		exit(-1);
+// 	} else {
+// 		struct page *page = spt_find_page(&thread_current()->spt, addr);
+		
+// 		if (page == NULL) {
+// 			exit(-1);
+// 		} else {
+// 			return page;
+// 		}
+// 	}
+// }
 
+void check_valid_buffer (void *buffer, unsigned size, bool is_read) {
+	// PJ3
+	for (int i = 0; i < size; i++) {
+		struct page *page = check_address(buffer + i);
+		
+		if (is_read && page->writable == false) {
+			exit(-1);
+		}
+	}
+}
 
 /* PintOS를 종료시킨다. */
 void halt(void)
@@ -182,6 +227,7 @@ int exec(const char *cmd_line)
 tid_t fork(const char *thread_name, struct intr_frame *f)
 {
 	/* 부모 스레드는 자식 스레드가 복제 완료될 때 까지 리턴하면 x */
+	// printf("\n ### fork ### \n"); // 지워
 	check_address(thread_name);
 	return process_fork(thread_name, f);
 }
@@ -226,7 +272,9 @@ int filesize(int fd)
 
 int read(int fd, void *buffer, unsigned size)
 {
-	check_address(buffer);
+	// PJ3
+	check_valid_buffer(buffer, size, true);
+	
 	lock_acquire(&file_lock);
 
 	int read_result;
@@ -267,7 +315,9 @@ int read(int fd, void *buffer, unsigned size)
 
 int write(int fd, const void *buffer, unsigned size)
 {
-	check_address(buffer);
+	// PJ3
+	check_valid_buffer(buffer, size, false);
+	
 	lock_acquire(&file_lock);
 
 	int write_result;

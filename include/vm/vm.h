@@ -83,7 +83,7 @@ struct aux_for_lazy_load {
 	off_t ofs;
 	uint32_t page_read_bytes;
 	uint32_t page_zero_bytes;
-	uint8_t upage;
+	uint8_t upage;					// struct page에 담겨져 있다.
 	bool writable;
 };
 
@@ -107,7 +107,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
-	struct hash *vm;
+	struct hash vm;
 };
 
 #include "threads/thread.h"
