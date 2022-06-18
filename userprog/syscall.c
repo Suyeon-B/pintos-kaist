@@ -49,6 +49,12 @@ void syscall_init(void)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
+	// printf("\n\n ### syscall_handler - f->rsp : %p ### \n\n", f->rsp);
+	// printf("\n\n ### kernel : %p ### \n\n", thread_current()->tf.rsp);
+// #ifdef VM
+// 	thread_current()->user_rsp = f->rsp;
+// #endif
+	// printf("\n\n ### syscall_handler - rsp : %p ### \n\n", f->rsp);		// rsp는 사용자 스택을 가르키고 있다.
 	switch (f->R.rax) /* rax : system call number */
 	{
 	/* Projects 2 and later.

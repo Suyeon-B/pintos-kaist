@@ -15,6 +15,9 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#ifdef VM
+#include "vm/vm.h"
+#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -126,6 +129,7 @@ void thread_init(void)
 	list_init(&sleep_list);
 	list_init(&destruction_req);
 	list_init(&all_list);
+	list_init(&frame_table);  // PJ3
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread();

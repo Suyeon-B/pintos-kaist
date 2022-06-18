@@ -6,6 +6,9 @@
 // PJ3
 #include "lib/kernel/hash.h"
 
+// PJ3
+struct list frame_table;
+
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -74,6 +77,10 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	
+	// PJ3
+	struct thread *thread;
+	struct list_elem frame_elem;
 };
 
 // PJ3

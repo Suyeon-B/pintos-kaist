@@ -11,6 +11,7 @@
 #include "string.h"
 #include "include/lib/user/syscall.h"
 
+// PJ3
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -106,28 +107,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 				break;
 		}
 		page->writable = writable;
-		// printf("\n\n ### vm_alloc frame : %p ### \n\n", page->frame);
-		// printf("\n\n ### vm_alloc type : %d ### \n\n", page->anon.type);
-		// printf("\n\n ### vm_alloc type : %d ### \n\n", page->uninit.type);
-		
-		// printf("\n\n ### page : %p ###", *page);
-		// printf("\n\n ### page_ops : %p ###", &(page->operations));
-		
-		// struct page *test_page = (struct page *) malloc(sizeof (struct page));
-		// memcpy(test_page, page, sizeof (struct page));
-		// printf("\n ### page : %d \n", page->writable);
-		// printf("\n ### page : %p \n", page->va);
-		// printf("\n ### test : %d \n", test_page->writable);
-		// printf("\n ### test : %p \n", test_page->va);
-		// printf("\n ###############\n");
-		
-		// printf("\n\n ### %p ### \n\n", page->frame); /* 지워 */
-		// printf("\n\n ### vm_alloc_page_with_initializer ### \n\n"); /* 지워 */
-		/* TODO: Insert the page into the spt. */
+
+		/* Insert the page into the spt. */
 		success = spt_insert_page(spt, page);	
-		
-		// printf("\n\n ### vm_alloc_page_with_initializer ### \n\n"); /* 지워 */
-		// printf("\n\n ### success : %d ### \n\n", success);
+
 		return success;
 	}
 err:
@@ -219,8 +202,23 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
+static bool
 vm_stack_growth (void *addr UNUSED) {
+	if (vm_alloc_page(VM_MARKER_0 | VM_ANON, pg_round_down(addr), true)) {
+		thread_current()->stack_bottom -= PGSIZE;
+		return true;
+		// printf("\n\n ### vm_stack_growth - fail 1 ### \n\n");
+	}
+	
+	return false;
+	
+	// if (!vm_claim_page(pg_round_down(addr))) {
+	// 	printf("\n\n ### vm_stack_growth - fail 2 ### \n\n");
+	// 	return;
+	// }
+	// printf("\n\n ### vm_stack_growth - 3 ### \n\n");
+	// printf("\n\n ### new stack_bottom : %p ### \n\n", pg_round_down(addr));
+	
 }
 
 /* Handle the fault on write_protected page */
@@ -240,8 +238,60 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	
 	// PJ3
 	// bool success = false;
+	// printf("\n\n ### vm_try_handle_fault - rsp : %p ### \n\n", f->rsp);  // 사용자 공간의 스택을 가르키고 있다.
 	
-	page = check_address(addr);
+	void *stack_bottom = thread_current()->stack_bottom;
+	// printf("\n\n ### vm_try_handle_fault - f->rsp : %p ### \n\n", f->rsp);
+	
+	// printf("\n\n ### vm_try_handle_fault - stack_bottom : %p ### \n\n", &stack_bottom);  // 사용자 공간의 스택을 가르키고 있다.
+	// printf("\n\n ### vm_try_handle_fault - stack_bottom : %p ### \n\n", stack_bottom);  // 사용자 공간의 스택을 가르키고 있다.
+	// printf("\n\n ### vm_try_handle_fault - stack_bottom - 8 : %p ### \n\n", stack_bottom - 8);
+	// printf("\n\n ### f->rsp : %p ### \n\n", user_rsp);
+	// printf("\n\n ### USER_STACK : %p ### \n\n", stack_bottom + PGSIZE);
+	// printf("\n\n ### addr : %p ### \n\n", addr);
+	// printf("\n\n ### f->rsp : %p ### \n", f->rsp);
+	
+	if (addr == NULL || is_kernel_vaddr(addr) || not_present == false) {
+		// exit(-1);
+		return false;
+	}
+	
+	// if (not_present == true) {
+	// 	if (f->rsp - 8 <= addr && addr < f->rsp) {
+	// 		printf("\n\n ### addr : %p ### \n\n", addr);
+	// 		printf("\n\n ### f->rsp : %p ### \n\n", f->rsp);
+	// 		printf("\n\n ### diff : %p ### \n\n", f->rsp - (uint64_t)addr);
+	// 		vm_stack_growth(f->rsp);
+			
+	// 	} else {
+	// 		page = spt_find_page(spt, addr);
+			
+	// 		if (page == NULL) {
+	// 			exit(-1);
+	// 		}
+	// 	}
+	// } else {
+	// 	return false;
+	// }
+	
+	// // page = check_address(addr);
+	
+	page = spt_find_page(spt, addr);
+	
+	if (page == NULL) {
+		// void *rsp = user ? f->rsp : thread_current()->user_rsp;
+		
+		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr == f->rsp - 8) {
+			void *fpage = thread_current()->stack_bottom - PGSIZE;
+			if (vm_stack_growth(fpage)) {
+				page = spt_find_page(spt, fpage);
+			} else {
+				return false;
+			}
+		} else {
+			return false;
+		}
+	}
 	
 	return vm_do_claim_page(page);
 }
@@ -289,7 +339,11 @@ vm_do_claim_page (struct page *page) {
 
 	/* Set links */
 	frame->page = page;
-	page->frame = frame;	
+	page->frame = frame;
+	
+	if (frame != NULL) {
+		list_push_back(&frame_table, &frame->frame_elem);
+	}
 	
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	// PJ3

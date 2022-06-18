@@ -86,7 +86,8 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 	/* cur = 부모 프로세스(Caller)! */
 	struct thread *curr = thread_current();
 	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
-
+	// printf("\n\n ### process_fork - if_ - rsp : %p ### \n\n", if_->rsp); // 사용자 공간의사용자 프로세스의 스택을 가르키고 있다.
+	// printf("\n\n ### process_fork - curr - rsp : %p ### \n\n", curr->tf.rsp); // 커널 공간의 스택을 가르키고 있다.
 	/* 새롭게 프로세스를 하나 더 만든다. 이 자식 프로세스는 __do_fork()를 수행한다. */
 	tid_t tid = thread_create(name, curr->priority, __do_fork, curr);
 	if (tid == TID_ERROR)
@@ -873,9 +874,11 @@ setup_stack(struct intr_frame *if_)
 	}
 	
 	success = vm_claim_page(stack_bottom);
+	// printf("\n\n ########## setup_stack - stack_bottom : %p ########## \n\n", stack_bottom);
 	
 	if (success) {
 		if_->rsp = USER_STACK;
+		thread_current()->stack_bottom = stack_bottom;
 	}
 	
 	return success;

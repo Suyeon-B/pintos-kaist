@@ -130,6 +130,10 @@ page_fault (struct intr_frame *f) {
 
 	fault_addr = (void *) rcr2();
 
+	// printf("\n\n ### fault_addr : %p ### \n\n", fault_addr); // 지워
+	// printf("\n\n ### rsp(사용자 프로세스의 스택 공간으로, USER_STACK 아래) : %p ### \n\n", f->rsp);  // 지워
+	// printf("\n\n ### rsp가 저장된 kernel virtual 공간의 주소 : %p ### \n\n", &f->rsp); // 지워
+
 	/* Turn interrupts back on (they were only off so that we could
 	   be assured of reading CR2 before it changed). */
 	intr_enable ();
@@ -154,6 +158,6 @@ page_fault (struct intr_frame *f) {
 	// 		not_present ? "not present" : "rights violation",
 	// 		write ? "writing" : "reading",
 	// 		user ? "user" : "kernel");
-	kill (f);
+	exit(-1);
 }
 
