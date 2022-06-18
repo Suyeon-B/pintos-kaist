@@ -47,7 +47,7 @@ tid_t process_create_initd(const char *file_name)
 	fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy(fn_copy, file_name, PGSIZE);
+	memcpy(fn_copy, file_name, PGSIZE);
 
 	/* 첫번째 공백 전까지(파일명)의 문자열 파싱 */
 	char *save_ptr;						 /* 분리되고 남은 문자열 */
@@ -82,11 +82,11 @@ initd(void *f_name)
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
 	/* Clone current thread to new thread.*/
-	/* cur = 부모 프로세스(Caller)! */
+	/* cur = 부모 프로세스(Caller) */
 	struct thread *curr = thread_current();
 	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
 
-	/* 새롭게 프로세스를 하나 더 만든다. 이 자식 프로세스는 __do_fork()를 수행한다. */
+	/* 새롭게 프로세스를 하나 더 만든다. 자식 프로세스는 __do_fork()를 수행한다. */
 	tid_t tid = thread_create(name, curr->priority, __do_fork, curr);
 	if (tid == TID_ERROR)
 		return TID_ERROR;
@@ -165,7 +165,7 @@ __do_fork(void *aux)
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
-	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+	/* pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
@@ -202,7 +202,7 @@ __do_fork(void *aux)
 	}
 
 	/* 부모의 FDT 복사 */
-	for (int i = 0; i < FD_LIMIT; i++)
+	for (int i = 2; i < FD_LIMIT; i++)
 	{ /* ! 여기 0이 아니라 2부터도 돌려보기 */
 		struct file *file = parent->fdt[i];
 		if (file == NULL)
@@ -261,6 +261,10 @@ int process_exec(void *f_name) /* 프로세스 실행 - 실행하려는 바이�
 
 	/* We first kill the current context */
 	process_cleanup();
+
+#ifdef VM
+	supplemental_page_table_init(&thread_current()->spt);
+#endif
 
 	/* 파싱하기 */
 	int token_count = 0;
@@ -342,10 +346,9 @@ void process_exit(void)
 	file_close(curr->running_file);				/* running file 닫기 */
 	palloc_free_multiple(curr->fdt, FDT_PAGES); /* fd_table 반환 */
 
-	process_cleanup(); /* ! 이거 세마 밑에 있어야되는 거 아님? */
-
 	sema_up(&curr->sema_wait);	 /* wait하고 있을 parent를 위해 */
 	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
+	process_cleanup();			 /* ! 이거 세마 밑에 있어야되는 거 아님? */
 }
 
 /* Free the current process's resources. */
@@ -705,6 +708,7 @@ setup_stack(struct intr_frame *if_)
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
+
 static bool
 install_page(void *upage, void *kpage, bool writable)
 {
@@ -725,6 +729,20 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	/* Load this page. */
+	struct aux_for_lazy_load *lazy_load = (struct aux_for_lazy_load *)aux;
+	struct file *file = lazy_load->load_file;
+	size_t offset = lazy_load->offset;
+	size_t read_bytes = lazy_load->read_bytes;
+	size_t zero_bytes = lazy_load->zero_bytes;
+
+	file_seek(file, offset);
+	if (file_read(file, page->frame->kva, read_bytes) != (int)read_bytes)
+	{
+		return false;
+	}
+	memset(page->frame->kva + read_bytes, 0, zero_bytes);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -756,21 +774,37 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		/* 여기서 고민한 점
+		 * 1. load_segment → vm_alloc_page_with_initializer를 통해 기대하는 결과는?
+		 * 2. upage와 kpage의 구분
+		 * 3. lazy_load_segment에 넘겨줄 aux가 뭘까
+		 * 4. lazy loading을 위해 파일 정보를 임시로 저장해둔 뒤,
+		 *    lazy_load_segment로 보내 한꺼번에 로드하고 싶다면 새로운 구조체를 만들어야할까 */
+		struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)malloc(sizeof(struct aux_for_lazy_load));
 
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
+		/* page fault 시에만 lazy load */
+		aux->load_file = file;
+		aux->offset = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+
+		/* Set up aux to pass information to the lazy_load_segment. */
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux))
+		{
+			free(aux);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
 
+/* Create a PAGE of stack at the USER_STACK. Return true on success. */
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack(struct intr_frame *if_)
@@ -782,6 +816,18 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+	if (!vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, true))
+	{
+		return false;
+	}
+
+	success = vm_claim_page(stack_bottom);
+
+	if (success)
+	{
+		if_->rsp = USER_STACK;
+		thread_current()->stack_bottom = stack_bottom;
+	}
 
 	return success;
 }
@@ -794,41 +840,6 @@ void argument_stack(int argc, char **argv, struct intr_frame *if_)
 	argc : 인자의 개수
 	if_ : 스택 포인터를 가리키는 주소 값을 저장할 intr_frame
 	*/
-	// char *arg_address[128]; //총 128개 저장가능
-
-	// /* 프로그램 이름 및 인자(문자열) push */
-	// for (int k = argc - 1; k >= 0; k--) //뒤에서 부터 넣어주기
-	// {
-	// 	int argv_len = strlen(argv[k]);
-	// 	if_->rsp = if_->rsp - (argv_len + 1);
-	// 	memcpy(if_->rsp, argv[k], argv_len + 1); //메모리 카피해 주기
-	// 	arg_address[k] = if_->rsp;				 //해당 메모리 저장
-	// }
-
-	// /* Insert padding for word-align */
-	// /* ! 여기 8바이트 정렬 다르고, memset쓴 거 다름 */
-	// while (if_->rsp % 16 != 0)
-	// {
-	// 	if_->rsp--;
-	// 	*(uint8_t *)(if_->rsp) = 0;
-	// }
-
-	// if_->rsp = if_->rsp - 8;
-	// *(int8_t *)if_->rsp = 0;
-
-	// /* 프로그램 이름 및 인자 주소들 push */
-	// for (int i = argc - 1; i >= 0; i--)
-	// {
-	// 	if_->rsp = if_->rsp - 8;
-	// 	memcpy(if_->rsp, &arg_address[i], sizeof(char **));
-	// }
-
-	// /* fake addr 0 넣어주기 */
-	// if_->rsp = if_->rsp - 16;
-	// *(int8_t *)if_->rsp = 0;
-
-	// if_->R.rdi = argc;			/* 문자열의 개수 저장 */
-	// if_->R.rsi = if_->rsp + 16; /*  문자열을 가리키는 주소들의 배열을 가리킴 */
 	int i;
 	char *argu_addr[128];
 	int argc_len;
@@ -873,7 +884,7 @@ int add_file_to_fdt(struct file *file)
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fdt;
 
-	// file 포인터를 fd_table안에 넣을 index 찾기
+	/* file 포인터를 fd_table안에 넣을 index 찾기 */
 	while (curr->next_fd < FD_LIMIT && fdt[curr->next_fd])
 	{
 		curr->next_fd++;
