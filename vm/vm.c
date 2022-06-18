@@ -53,7 +53,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 									vm_initializer *init, void *aux) /* writable 왜 안씀? */
 {
 	ASSERT(VM_TYPE(type) != VM_UNINIT)
-	bool success = false;
+
 	struct supplemental_page_table *spt = &thread_current()->spt;
 
 	/* Check wheter the upage is already occupied or not. */
@@ -62,7 +62,6 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* Create the page, fetch the initialier according to the VM type,
 		 * and then create "uninit" page struct by calling uninit_new. */
 		struct page *page = (struct page *)malloc(sizeof(struct page));
-		bool success = true;
 
 		switch (VM_TYPE(type))
 		{
@@ -83,12 +82,10 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		page->type = type;
 
 		/* Insert the page into the spt. */
-		success = spt_insert_page(spt, page);
-
-		return success;
+		return spt_insert_page(spt, page);
 	}
 err:
-	return success;
+	return false;
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
@@ -170,15 +167,16 @@ vm_get_frame(void)
 }
 
 /* Growing the stack. */
-bool vm_stack_growth(void *addr UNUSED)
+static bool
+vm_stack_growth(void *addr UNUSED)
 {
-	if (!vm_alloc_page(VM_ANON, pg_round_down(addr), true))
+	if (vm_alloc_page(VM_MARKER_0 | VM_ANON, addr, true))
 	{
-		return false;
+		thread_current()->stack_bottom -= PGSIZE;
+		return true;
 	}
 
-	thread_current()->rsp = thread_current()->tf.rsp;
-	return true;
+	return false;
 }
 
 /* Handle the fault on write_protected page */
@@ -191,14 +189,38 @@ vm_handle_wp(struct page *page UNUSED)
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
-	/* TODO : 여기서 intr_frame *f는 왜 필요한가? */
-	/* addr가 stack growth요청인 경우 (page X, frame X)
-	 * - 이미 page가 할당된 주소가 아님을 보장해야함
-	 *
-	 * vaildity 체크 후 invalid하다면,
-	 * process_exit->supplemental_page_table_kill */
-	struct page *page = check_address(addr);
-	/* addr가 단순 frame연결 요청인 경우 (page O, frame X) */
+
+	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
+	struct page *page = NULL;
+	/* Validate the fault */
+	if (!addr || is_kernel_vaddr(addr) || !not_present)
+	{
+		return false;
+	}
+
+	page = spt_find_page(spt, addr);
+
+	if (!page)
+	{
+		void *rsp = user ? f->rsp : thread_current()->user_rsp;
+		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr >= rsp - 8 && addr < thread_current()->stack_bottom)
+		{
+			void *fpage = thread_current()->stack_bottom - PGSIZE;
+			if (vm_stack_growth(fpage))
+			{
+				page = spt_find_page(spt, fpage);
+			}
+			else
+			{
+				return false;
+			}
+		}
+		else
+		{
+			return false;
+		}
+	}
+
 	return vm_do_claim_page(page);
 }
 
@@ -227,7 +249,7 @@ bool vm_claim_page(void *va UNUSED)
 static bool
 vm_do_claim_page(struct page *page)
 {
-	if (!page)
+	if (!page || !is_user_vaddr(page->va))
 	{
 		return false;
 	}
