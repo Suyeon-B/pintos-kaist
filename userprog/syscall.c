@@ -99,6 +99,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE: /* Close a file. */
 		close(f->R.rdi);
 		break;
+	case SYS_MMAP: /* 0619 */
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	case SYS_MUNMAP: /* 0619 */
+		munmap(f->R.rdi);
+		break;
 	default:
 		exit(-1);
 		break;
@@ -364,4 +370,34 @@ void check_valid_buffer(void *buffer, unsigned size, bool is_read)
 			exit(-1);
 		}
 	}
+}
+
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+	/* validity check */
+	if ((uint64_t)addr % PGSIZE || !addr || !length || fd == 0 || fd == 1)
+	{
+		return NULL;
+	}
+	if (spt_find_page(&thread_current()->spt, addr))
+	{
+		return NULL;
+	}
+	struct file *open_file = process_get_file(fd);
+	if (!open_file)
+	{
+		return NULL;
+	}
+	open_file = file_reopen(open_file);
+	return do_mmap(addr, length, writable, open_file, offset);
+}
+
+void munmap(void *addr)
+{
+	/* validity check */
+	if ((uint64_t)addr % PGSIZE || !addr)
+	{
+		return;
+	}
+	do_munmap(addr);
 }
