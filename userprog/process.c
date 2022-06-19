@@ -810,7 +810,9 @@ static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	// printf("\n\n ########## load_segment ########## \n\n"); /* 지워 */
+	// printf("\n\n ########## load_segment ########## file : %p \n\n", file); /* 지워 */
+	// printf("\n\n ########## load_segment ########## read_bytes : %d \n\n", read_bytes); /* 지워 */
+	// printf("\n\n ########## load_segment ########## upage : %p \n\n", upage); /* 지워 */
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);	

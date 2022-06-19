@@ -135,8 +135,10 @@ struct thread
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
-	void *user_rsp;
+	
+	// PJ3
 	void *stack_bottom;
+	
 #endif
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;		  /* Detects stack overflow. */

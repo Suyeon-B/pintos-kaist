@@ -204,7 +204,8 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static bool
 vm_stack_growth (void *addr UNUSED) {
-	if (vm_alloc_page(VM_MARKER_0 | VM_ANON, pg_round_down(addr), true)) {
+	// PJ3
+	if (vm_alloc_page(VM_MARKER_0 | VM_ANON, addr, true)) {
 		thread_current()->stack_bottom -= PGSIZE;
 		return true;
 		// printf("\n\n ### vm_stack_growth - fail 1 ### \n\n");
@@ -237,44 +238,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Your code goes here */
 	
 	// PJ3
-	// bool success = false;
-	// printf("\n\n ### vm_try_handle_fault - rsp : %p ### \n\n", f->rsp);  // 사용자 공간의 스택을 가르키고 있다.
-	
-	void *stack_bottom = thread_current()->stack_bottom;
-	// printf("\n\n ### vm_try_handle_fault - f->rsp : %p ### \n\n", f->rsp);
-	
-	// printf("\n\n ### vm_try_handle_fault - stack_bottom : %p ### \n\n", &stack_bottom);  // 사용자 공간의 스택을 가르키고 있다.
-	// printf("\n\n ### vm_try_handle_fault - stack_bottom : %p ### \n\n", stack_bottom);  // 사용자 공간의 스택을 가르키고 있다.
-	// printf("\n\n ### vm_try_handle_fault - stack_bottom - 8 : %p ### \n\n", stack_bottom - 8);
-	// printf("\n\n ### f->rsp : %p ### \n\n", user_rsp);
-	// printf("\n\n ### USER_STACK : %p ### \n\n", stack_bottom + PGSIZE);
-	// printf("\n\n ### addr : %p ### \n\n", addr);
-	// printf("\n\n ### f->rsp : %p ### \n", f->rsp);
-	
 	if (addr == NULL || is_kernel_vaddr(addr) || not_present == false) {
 		// exit(-1);
 		return false;
 	}
-	
-	// if (not_present == true) {
-	// 	if (f->rsp - 8 <= addr && addr < f->rsp) {
-	// 		printf("\n\n ### addr : %p ### \n\n", addr);
-	// 		printf("\n\n ### f->rsp : %p ### \n\n", f->rsp);
-	// 		printf("\n\n ### diff : %p ### \n\n", f->rsp - (uint64_t)addr);
-	// 		vm_stack_growth(f->rsp);
-			
-	// 	} else {
-	// 		page = spt_find_page(spt, addr);
-			
-	// 		if (page == NULL) {
-	// 			exit(-1);
-	// 		}
-	// 	}
-	// } else {
-	// 	return false;
-	// }
-	
-	// // page = check_address(addr);
 	
 	page = spt_find_page(spt, addr);
 	
@@ -283,6 +250,13 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		
 		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr == f->rsp - 8) {
 			void *fpage = thread_current()->stack_bottom - PGSIZE;
+			// printf("\n\n ### stack_bottom : %p ### \n\n", thread_current()->stack_bottom);
+			// printf("\n\n ### fpage : %p ### \n\n", fpage);
+			// printf("\n ### fault_address : %p ### \n", addr);
+			// printf("\n ### f->rsp : %p ### \n", f->rsp);
+			// printf("\n ### f->rsp - fault_address : %p ### \n", f->rsp - (uintptr_t)addr);
+			// printf("\n\n ### pg_round_down(addr) : %p ### \n\n", pg_round_down(addr));
+			// printf("\n\n ################################\n\n");
 			if (vm_stack_growth(fpage)) {
 				page = spt_find_page(spt, fpage);
 			} else {
@@ -358,13 +332,13 @@ vm_do_claim_page (struct page *page) {
 	// 	return false;
 	// }
 	
-	// if (!install_page(page->va, frame->kva, page->writable)) {
-	// 	return false;
-	// }
-	
-	if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable)) {
+	if (!install_page(page->va, frame->kva, page->writable)) {
 		return false;
 	}
+	
+	// if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable)) {
+	// 	return false;
+	// }
 	
 	// printf("\n\n ### vm_do_claim_page ### \n\n"); /* 지워 */
 	return swap_in (page, frame->kva);
@@ -375,72 +349,13 @@ void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	// PJ3
 	hash_init(&spt->vm, page_hash, page_less, NULL);
-}
-
-// /* Copy supplemental page table from src to dst */
-// bool supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED, struct supplemental_page_table *src UNUSED) {
-// 	// PJ3
-// 	// printf("\n ### supplemental_page_table_copy - 1 ### \n"); // 지워
-// 	// printf("\n ### src->vm : %p ### \n", &src->vm);
-// 	struct hash_iterator iterator;
-// 	hash_first(&iterator, &src->vm);		// 맨 처음은 dummy라서, 해당 hash_elem은 복사하지 않아도 된다.
-	
-// 	// printf("\n ### supplemental_page_table_copy - 2 ### \n"); // 지워
-	
-// 	// hash_next(&iterator);
-// 	// printf("\n ### supplemental_page_table_copy - 3 ### \n"); // 지워
-// 	while (hash_next (&iterator)) {
-// 		// printf("\n ### supplemental_page_table_copy - 3 ### \n"); // 지워
-// 		struct page *parent_page = hash_entry (hash_cur (&iterator), struct page, page_elem);
-// 		enum vm_type parent_type = page_get_type(parent_page);
-		
-// 		struct page *child_page = (struct page *)malloc(sizeof (struct page));
-// 		struct thread *child_thread = thread_current();
-		
-// 		if (parent_type == VM_UNINIT) {
-// 				struct uninit_page *parent_uninit = &parent_page->uninit;
-// 				struct aux_for_lazy_load *parent_aux = &parent_uninit->aux;
-// 				vm_initializer *parent_init = parent_uninit->init;
-				
-// 				struct aux_for_lazy_load *child_aux = (struct aux_for_lazy_load *)malloc(sizeof(struct aux_for_lazy_load));
-// 				if (child_aux == NULL) {
-// 					return false;
-// 				}
-// 				memcpy(child_aux, parent_aux, sizeof(struct aux_for_lazy_load));
-				
-// 				if (!vm_alloc_page_with_initializer(parent_uninit->type, parent_page->va, parent_page->writable, parent_init, child_aux)) {
-// 					return false;
-// 				}
-// 		}
-		
-// 		// PJ3, stack도 ANON이다.
-// 		if ((parent_type & VM_ANON) == VM_ANON) {
-// 				if (!vm_alloc_page(parent_type, parent_page->va, parent_page->writable)) {
-// 					return false;
-// 				}
-			
-// 				child_page = spt_find_page(&child_thread->spt, parent_page->va);
-				
-// 				if (!vm_do_claim_page(child_page)) {
-// 					return false;
-// 				}
-				
-// 				memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
-// 		}
-		
-// 		if (parent_type == VM_FILE) {
-			
-// 		}
-// 	}
-	
-// 	// printf("\n ### supplemental_page_table_copy - 4 ### \n"); // 지워
-// 	return true;
-// }
+}	
 
 /* Copy supplemental page table from src to dst */
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 								  struct supplemental_page_table *src UNUSED)
 {
+	// PJ3
 	struct hash_iterator i;
 	struct page *parent_page;
 	struct thread *child_thread = thread_current();
