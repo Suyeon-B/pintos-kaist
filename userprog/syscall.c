@@ -102,6 +102,14 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE: /* Close a file. */
 		close(f->R.rdi);
 		break;
+	
+	// PJ3
+	case SYS_MMAP:
+		f->R.rax  = mmap (f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);		// PJ3, NULL 반환 받을까봐 일단 이렇게 했다.
+		break;
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
 	default:
 		exit(-1);
 		break;
@@ -391,4 +399,41 @@ void close(int fd)
 		return;
 	}
 	process_close_file(fd);
+}
+
+// PJ3
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	// 실패 케이스부터 처리해보자.
+	// do_mmap은 fd가 아니라 file을 받으므로 fd를 바탕으로 file을 꺼낸 다음 do_mmap의 인자로 넘겨줘야겠다.
+	if (addr != pg_round_down(addr)) {
+		return NULL;
+	}
+	
+	if (length == 0) {
+		return NULL;
+	}
+	
+	if (fd == 0 || fd == 1) {
+		return NULL;
+	}
+	
+	if (addr == NULL) {
+		return NULL;
+	}
+	
+	if (spt_find_page(thread_current()->spt, addr) != NULL) {
+		return NULL;
+	}
+	
+	struct file *file = process_get_file(fd);
+	
+	if (file == NULL) {
+		return NULL;
+	}
+	
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void munmap (void *addr) {
+	
 }
