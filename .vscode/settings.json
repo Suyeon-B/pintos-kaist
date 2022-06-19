@@ -8,6 +8,8 @@
     "intrinsic.h": "c",
     "mmu.h": "c",
     "process.h": "c",
-    "malloc.h": "c"
+    "malloc.h": "c",
+    "*.inc": "c",
+    "vm.h": "c"
   }
 }

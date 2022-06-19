@@ -22,6 +22,7 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
+#include "lib/kernel/hash.h"
 
 /* General process initializer for initd and other process. */
 static void
@@ -331,6 +332,18 @@ int process_wait(tid_t child_tid UNUSED)
 	return child_exit_status;
 }
 
+#ifdef VM
+void mmap_destroy(struct hash_elem *hash_elem, void *aux)
+{
+	struct page *page = hash_entry(hash_elem, struct page, hash_elem);
+
+	if (page_get_type(page) == VM_FILE)
+	{
+		pml4_clear_page(&thread_current()->pml4, page->va);
+	}
+}
+#endif
+
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit(void)
 {
@@ -339,6 +352,9 @@ void process_exit(void)
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+#ifdef VM
+	hash_apply(&curr->spt.vm, mmap_destroy);
+#endif
 	for (int i = 0; i < FD_LIMIT; i++)
 	{
 		close(i);
@@ -348,7 +364,7 @@ void process_exit(void)
 
 	sema_up(&curr->sema_wait);	 /* wait하고 있을 parent를 위해 */
 	sema_down(&curr->sema_exit); /* 부모 스레드의 자식 list에서 지워질 때 까지 기다림 */
-	process_cleanup();			 /* ! 이거 세마 밑에 있어야되는 거 아님? */
+	process_cleanup();
 }
 
 /* Free the current process's resources. */
@@ -736,8 +752,15 @@ bool lazy_load_segment(struct page *page, void *aux)
 	size_t zero_bytes = lazy_load->zero_bytes;
 
 	file_seek(file, offset);
+	// printf("\n\n### file addr in lazy_load_segment: %p\n\n", file);
+	// printf("\n\n### read_bytes in lazy_load_segment: %p\n\n", read_bytes);
+	// printf("\n\n### page->frame->kva in lazy_load_segment: %p\n\n", page->frame->kva);
+
 	if (file_read(file, page->frame->kva, read_bytes) != (int)read_bytes)
 	{
+		// printf("\n\n### file_read 값 : %d\n\n", file_read(file, page->frame->kva, read_bytes));
+		// printf("\n\n### read_bytes 값 : %d\n\n", read_bytes);
+
 		return false;
 	}
 	memset(page->frame->kva + read_bytes, 0, zero_bytes);

@@ -263,6 +263,8 @@ vm_do_claim_page(struct page *page)
 	{
 		return false;
 	}
+
+	// printf("\n\n page->frame->kva\n\n");
 	return swap_in(page, frame->kva);
 }
 

@@ -53,7 +53,6 @@ file_backed_destroy(struct page *page)
 }
 
 /* Do the mmap */
-/* 0619 */
 void *
 do_mmap(void *addr, size_t read_bytes, int writable,
 		struct file *file, off_t offset)
@@ -68,12 +67,14 @@ do_mmap(void *addr, size_t read_bytes, int writable,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* [0619]TODO: aux 를 어떻게 넘겨주지 */
 		struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)malloc(sizeof(struct aux_for_lazy_load));
 		aux->load_file = file;
 		aux->offset = offset;
 		aux->read_bytes = page_read_bytes;
-		aux->zero_bytes = PGSIZE - page_zero_bytes;
+		aux->zero_bytes = page_zero_bytes;
+
+		// printf("\n\n### file addr in mmap: %p", aux->load_file);
+		// printf("\n\n### read_bytes in mmap: %p", aux->read_bytes);
 
 		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_segment, aux))
 		{
@@ -94,7 +95,7 @@ void do_munmap(void *addr)
 	struct thread *curr = thread_current();
 	struct supplemental_page_table *spt = &curr->spt;
 	struct page *page = spt_find_page(&spt, addr);
-	if (!page || page->type != VM_FILE)
+	if (!page || page_get_type(page) != VM_FILE)
 	{
 		return;
 	}
@@ -108,11 +109,13 @@ void do_munmap(void *addr)
 	{
 		/* if the file is dirty */
 		if (pml4_is_dirty(curr->pml4, aux->load_file))
-		{ /* 수상함 &붙여야하나 */
+		{
 			/* buffer의 내용을 file의 offset부터  */
-			file_write_at(aux->load_file, page->frame->kva, aux->read_bytes, aux->offset);
+			file_write_at(aux->load_file, addr, aux->read_bytes, aux->offset);
 		}
+		pml4_clear_page(curr->pml4, addr);
 		spt_remove_page(spt, page);
+
 		addr += PGSIZE;
 		page = spt_find_page(spt, addr);
 
