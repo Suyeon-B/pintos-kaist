@@ -10,6 +10,7 @@
     "process.h": "c",
     "malloc.h": "c",
     "*.inc": "c",
-    "vm.h": "c"
+    "vm.h": "c",
+    "stdint.h": "c"
   }
 }

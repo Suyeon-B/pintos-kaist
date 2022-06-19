@@ -348,12 +348,12 @@ void mmap_destroy(struct hash_elem *hash_elem, void *aux)
 void process_exit(void)
 {
 	struct thread *curr = thread_current();
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
+/* TODO: Your code goes here.
+ * TODO: Implement process termination message (see
+ * TODO: project2/process_termination.html).
+ * TODO: We recommend you to implement process resource cleanup here. */
 #ifdef VM
-	hash_apply(&curr->spt.vm, mmap_destroy);
+	// hash_apply(&curr->spt.vm, mmap_destroy);
 #endif
 	for (int i = 0; i < FD_LIMIT; i++)
 	{
@@ -374,7 +374,10 @@ process_cleanup(void)
 	struct thread *curr = thread_current();
 
 #ifdef VM
-	supplemental_page_table_kill(&curr->spt);
+	if (!hash_empty(&curr->spt.vm))
+	{
+		supplemental_page_table_kill(&curr->spt);
+	}
 #endif
 
 	uint64_t *pml4;

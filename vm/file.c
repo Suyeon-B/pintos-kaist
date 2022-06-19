@@ -52,17 +52,36 @@ file_backed_destroy(struct page *page)
 	free(page->frame); /* frame 할당 해제 */
 }
 
+void *undo_mmap(void *initial_addr, void *addr)
+{
+	struct thread *curr_thread = thread_current();
+	struct supplemental_page_table *spt = &curr_thread->spt;
+	struct page *page;
+	while (initial_addr < addr)
+	{
+		page = spt_find_page(spt, addr);
+		spt_remove_page(spt, page);
+		initial_addr += PGSIZE;
+	}
+	return NULL;
+}
+
 /* Do the mmap */
 void *
 do_mmap(void *addr, size_t read_bytes, int writable,
 		struct file *file, off_t offset)
 {
+	struct thread *curr_thread = thread_current();
+	struct supplemental_page_table *spt = &curr_thread->spt;
+	void *initial_addr = addr;
 
 	while (read_bytes > 0)
 	{
+		/* to avoid overlap */
 		if (spt_find_page(&thread_current()->spt, addr))
 		{
-			return NULL;
+			/* 만약 overlap이 발생하면, 할당한 페이지 모두 할당 해제 */
+			undo_mmap(initial_addr, addr);
 		}
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
@@ -73,58 +92,45 @@ do_mmap(void *addr, size_t read_bytes, int writable,
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
 
-		// printf("\n\n### file addr in mmap: %p", aux->load_file);
-		// printf("\n\n### read_bytes in mmap: %p", aux->read_bytes);
-
 		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_segment, aux))
 		{
 			free(aux);
-			return false;
+			undo_mmap(initial_addr, addr);
 		}
 
 		read_bytes -= page_read_bytes;
 		addr += PGSIZE;
 		offset += page_read_bytes;
 	}
-	return addr;
+	return initial_addr;
 }
 
 /* Do the munmap */
 void do_munmap(void *addr)
 {
 	struct thread *curr = thread_current();
-	struct supplemental_page_table *spt = &curr->spt;
-	struct page *page = spt_find_page(&spt, addr);
-	if (!page || page_get_type(page) != VM_FILE)
+	struct page *page;
+
+	if ((page = spt_find_page(&curr->spt, addr)) == NULL)
 	{
 		return;
 	}
 
-	struct file_page *file_page = &page->uninit;
-	struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)(file_page->aux);
-	struct file *mmap_file = (struct file *)malloc(sizeof(mmap_file)); /* 수상함 */
-	memcpy(mmap_file, aux->load_file, sizeof(mmap_file));
+	struct file *file = ((struct aux_for_lazy_load *)page->uninit.aux)->load_file;
 
-	while (mmap_file == aux->load_file)
+	while (page != NULL && page_get_type(page) == VM_FILE)
 	{
-		/* if the file is dirty */
-		if (pml4_is_dirty(curr->pml4, aux->load_file))
+		if (pml4_is_dirty(curr->pml4, page->va))
 		{
-			/* buffer의 내용을 file의 offset부터  */
-			file_write_at(aux->load_file, addr, aux->read_bytes, aux->offset);
+			struct aux_for_lazy_load *aux = page->uninit.aux;
+			file_write_at(aux->load_file, page->va, aux->read_bytes, aux->offset);
+			pml4_set_dirty(curr->pml4, page->va, false);
 		}
-		pml4_clear_page(curr->pml4, addr);
-		spt_remove_page(spt, page);
-
+		// pml4_clear_page(curr->pml4, addr);
+		spt_remove_page(&curr->spt, page);
 		addr += PGSIZE;
-		page = spt_find_page(spt, addr);
-
-		if (!page)
-		{
-			return;
-		}
-
-		file_page = &page->file;
-		aux = (struct aux_for_lazy_load *)(file_page->aux);
+		page = spt_find_page(&curr->spt, addr);
 	}
+
+	file_close(file);
 }
