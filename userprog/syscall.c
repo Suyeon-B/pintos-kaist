@@ -375,7 +375,7 @@ void check_valid_buffer(void *buffer, unsigned size, bool is_read)
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 {
 	/* ---- validity check ---- */
-	if (!addr || is_kernel_vaddr(addr) || (uint64_t)addr % PGSIZE || length <= 0)
+	if (!addr || is_kernel_vaddr(addr) || (uint64_t)addr % PGSIZE || (long)length <= 0) /* 형변환!!! */
 	{
 		return NULL;
 	}
@@ -409,9 +409,9 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 
 void munmap(void *addr)
 {
-	if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
-	{
-		return;
-	}
+	// if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
+	// {
+	// 	return;
+	// }
 	do_munmap(addr);
 }

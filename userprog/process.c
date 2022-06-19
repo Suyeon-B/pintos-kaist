@@ -337,9 +337,10 @@ void mmap_destroy(struct hash_elem *hash_elem, void *aux)
 {
 	struct page *page = hash_entry(hash_elem, struct page, hash_elem);
 
-	if (page_get_type(page) == VM_FILE)
+	if (!page && page_get_type(page) == VM_FILE)
 	{
-		pml4_clear_page(&thread_current()->pml4, page->va);
+		// pml4_clear_page(&thread_current()->pml4, page->va);
+		munmap(page->va);
 	}
 }
 #endif

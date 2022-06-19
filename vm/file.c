@@ -123,14 +123,12 @@ void do_munmap(void *addr)
 		if (pml4_is_dirty(curr->pml4, page->va))
 		{
 			struct aux_for_lazy_load *aux = page->uninit.aux;
-			file_write_at(aux->load_file, page->va, aux->read_bytes, aux->offset);
+			file_write_at(aux->load_file, addr, aux->read_bytes, aux->offset);
 			pml4_set_dirty(curr->pml4, page->va, false);
 		}
-		// pml4_clear_page(curr->pml4, addr);
 		spt_remove_page(&curr->spt, page);
+		// pml4_clear_page(&curr->pml4, addr);
 		addr += PGSIZE;
 		page = spt_find_page(&curr->spt, addr);
 	}
-
-	file_close(file);
 }
