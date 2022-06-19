@@ -33,7 +33,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	struct anon_page *anon_page = &page->anon;
 	
 	// PJ3
-	anon_page->type = type;
+	// anon_page->type = type;
 	// printf("\n\n ### 'hi'%d ### \n\n", page->uninit.type); /* 지워 */
 }
 

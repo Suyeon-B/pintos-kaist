@@ -99,8 +99,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		switch (VM_TYPE(type)) {	
 			case VM_ANON:
 				uninit_new(page, pg_round_down(upage), init, type, aux, anon_initializer);
-				// printf("\n\n ### vm_alloc type : %d ### \n\n", page->anon.type);
-				// printf("\n\n ### vm_alloc type : %d ### \n\n", page->uninit.type);
 				break;
 			case VM_FILE:
 				uninit_new(page, pg_round_down(upage), init, type, aux, file_backed_initializer);
@@ -246,28 +244,24 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	page = spt_find_page(spt, addr);
 	
 	if (page == NULL) {
-		// void *rsp = user ? f->rsp : thread_current()->user_rsp;
-		
-		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr == f->rsp - 8) {
+		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr == f->rsp - 8 && addr < thread_current()->stack_bottom) {
 			void *fpage = thread_current()->stack_bottom - PGSIZE;
-			// printf("\n\n ### stack_bottom : %p ### \n\n", thread_current()->stack_bottom);
-			// printf("\n\n ### fpage : %p ### \n\n", fpage);
-			// printf("\n ### fault_address : %p ### \n", addr);
-			// printf("\n ### f->rsp : %p ### \n", f->rsp);
-			// printf("\n ### f->rsp - fault_address : %p ### \n", f->rsp - (uintptr_t)addr);
-			// printf("\n\n ### pg_round_down(addr) : %p ### \n\n", pg_round_down(addr));
-			// printf("\n\n ################################\n\n");
+			
 			if (vm_stack_growth(fpage)) {
 				page = spt_find_page(spt, fpage);
+				
 			} else {
 				return false;
+				
 			}
 		} else {
 			return false;
 		}
 	}
 	
+	// printf("\n\n ### vm_try_handle_fault ### \n\n"); /* 지워 */
 	return vm_do_claim_page(page);
+	
 }
 
 /* Free the page.
@@ -340,7 +334,7 @@ vm_do_claim_page (struct page *page) {
 	// 	return false;
 	// }
 	
-	// printf("\n\n ### vm_do_claim_page ### \n\n"); /* 지워 */
+	// printf("\n\n ### vm_do_claim_page - frame->kva : %p ### \n\n", frame->kva); /* 지워 */
 	return swap_in (page, frame->kva);
 }
 
