@@ -112,6 +112,7 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 	return succ;
 }
 
+/* page remove from spt table */
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
 	hash_delete(&spt->vm, &page->hash_elem);
