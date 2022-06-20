@@ -25,4 +25,5 @@ test_main (void)
   for (i = 0; i < 2; i++)
     CHECK (!memcmp (actual[i], sample, strlen (sample)),
            "compare mmap'd file %zu against data", i);
+    
 }

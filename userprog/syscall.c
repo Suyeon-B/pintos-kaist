@@ -49,12 +49,6 @@ void syscall_init(void)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
-	// printf("\n\n ### syscall_handler - f->rsp : %p ### \n\n", f->rsp);
-	// printf("\n\n ### kernel : %p ### \n\n", thread_current()->tf.rsp);
-// #ifdef VM
-// 	thread_current()->user_rsp = f->rsp;
-// #endif
-	// printf("\n\n ### syscall_handler - rsp : %p ### \n\n", f->rsp);		// rsp는 사용자 스택을 가르키고 있다.
 	switch (f->R.rax) /* rax : system call number */
 	{
 	/* Projects 2 and later.
@@ -118,13 +112,6 @@ void syscall_handler(struct intr_frame *f UNUSED)
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
-// void check_address(const uint64_t *addr)
-// {
-// 	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
-// 	{
-// 		exit(-1);
-// 	}
-// }
 
 // PJ3
 struct page *
@@ -134,7 +121,6 @@ check_address (void *addr) {
 
 	if (!addr || !(is_user_vaddr(addr)) || !page) {
 		exit(-1);
-		// return;
 	}
 	
 	return page;
@@ -142,32 +128,16 @@ check_address (void *addr) {
 	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
 		exit(-1);
-		// return;
 	}
 #endif
 }
 
-// struct page *
-// check_address (void *addr) {
-// 	if (addr == NULL || is_kernel_vaddr(addr)) {
-// 		exit(-1);
-// 	} else {
-// 		struct page *page = spt_find_page(&thread_current()->spt, addr);
-		
-// 		if (page == NULL) {
-// 			exit(-1);
-// 		} else {
-// 			return page;
-// 		}
-// 	}
-// }
-
 void check_valid_buffer (void *buffer, unsigned size, bool is_read) {
 	// PJ3
-	for (int i = 0; i < size; i++) {
+	for (char i = 0; i < size; i++) {
 		struct page *page = check_address(buffer + i);
 		
-		if (is_read && page->writable == false) {
+		if (is_read && !page->writable) {
 			exit(-1);
 		}
 	}
@@ -403,13 +373,11 @@ void close(int fd)
 
 // PJ3
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
-	// 실패 케이스부터 처리해보자.
-	// do_mmap은 fd가 아니라 file을 받으므로 fd를 바탕으로 file을 꺼낸 다음 do_mmap의 인자로 넘겨줘야겠다.
-	if (addr != pg_round_down(addr)) {
+	if (!addr || is_kernel_vaddr(addr) || pg_round_down(addr) != addr || (long long)length <= 0) {		// PJ3, 엄청 긴 length가 들어올 수도 있다.
 		return NULL;
 	}
 	
-	if (length == 0) {
+	if (offset % PGSIZE) {
 		return NULL;
 	}
 	
@@ -421,7 +389,9 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 		return NULL;
 	}
 	
-	if (spt_find_page(thread_current()->spt, addr) != NULL) {
+	// 쉽게 찾으려면 file_backed_page도 spt에 넣는게 편하지 않을까?
+	// vm_alloc_page_with_initializer 혹은 vm_alloc_page를 사용하니까... 애초에 spt에서 찾아보는 게 맞을 것 같다.
+	if (spt_find_page(&thread_current()->spt, addr)) {
 		return NULL;
 	}
 	
@@ -431,9 +401,20 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 		return NULL;
 	}
 	
-	return do_mmap(addr, length, writable, file, offset);
+	file = file_reopen(file);
+	
+	
+	if (file == NULL) {
+		return NULL;
+	}
+	
+	return do_mmap(addr, file_length(file), writable, file, offset);
 }
 
 void munmap (void *addr) {
+	if (is_kernel_vaddr(addr) || (uint64_t)addr % PGSIZE || !addr) {
+		return;
+	}
 	
+	do_munmap(addr);
 }

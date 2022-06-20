@@ -15,13 +15,16 @@ test_main (void)
   void *kernel = (void *) 0x8004000000;
   CHECK (mmap (kernel, 4096, 0, handle, 0) == MAP_FAILED,
          "try to mmap over kernel 0");
+//   printf("\n\n ### 4096 ### \n\n");
 
   kernel = (void *) 0xfffffffffffff000;
   CHECK (mmap (kernel, 0x2000, 0, handle, 0) == MAP_FAILED,
          "try to mmap over kernel 1");
+//   printf("\n\n ### 8192 ### \n\n");
 
   kernel = (void *) 0x8004000000 - 0x1000;
   CHECK (mmap (kernel, -0x8004000000 + 0x1000, 0, handle, 0) == MAP_FAILED,
          "try to mmap over kernel 2");
+//   printf("\n\n ### largest ### \n\n");
 
 }

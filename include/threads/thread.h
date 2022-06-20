@@ -131,14 +131,13 @@ struct thread
 	struct file *running_file;
 	uint64_t *pml4; /* Page map level 4 */
 /* ---------------------------------------------------------- */
+// PJ3
+	void *stack_bottom;
+
 // #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
-	
-	// PJ3
-	void *stack_bottom;
-	
 #endif
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;		  /* Detects stack overflow. */

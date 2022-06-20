@@ -22,4 +22,7 @@ static void initd(void *f_name);
 static void __do_fork(void *);
 static void process_init(void);
 
+// PJ3
+bool lazy_load_segment(struct page *page, void *aux);
+
 #endif /* userprog/process.h */
