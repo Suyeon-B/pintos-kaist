@@ -130,13 +130,16 @@ struct thread
 	struct file *running_file;
 /* ---------------------------------------------------------- */
 #endif
-#ifdef VM
+	// #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
-	struct hash vm;
-	void *user_rsp; /* for stack growth */
+	// struct hash vm;
+	/* for stack growth */
+	void *user_rsp;
 	void *stack_bottom;
-#endif
+	/* for memory mapped files */
+	struct list *mmap_list;
+	// #endif
 	uint64_t *pml4;		  /* Page map level 4 */
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;		  /* Detects stack overflow. */

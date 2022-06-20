@@ -6,6 +6,11 @@
     "inspect.h": "c",
     "vaddr.h": "c",
     "intrinsic.h": "c",
-    "mmu.h": "c"
+    "mmu.h": "c",
+    "process.h": "c",
+    "malloc.h": "c",
+    "*.inc": "c",
+    "vm.h": "c",
+    "stdint.h": "c"
   }
 }

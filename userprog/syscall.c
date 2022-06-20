@@ -99,6 +99,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE: /* Close a file. */
 		close(f->R.rdi);
 		break;
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
 	default:
 		exit(-1);
 		break;
@@ -364,4 +370,49 @@ void check_valid_buffer(void *buffer, unsigned size, bool is_read)
 			exit(-1);
 		}
 	}
+}
+
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+	/* ---- validity check ---- */
+	if (!addr || is_kernel_vaddr(addr) || (uint64_t)addr % PGSIZE || (long)length <= 0) /* 형변환!!! */
+	{
+		return NULL;
+	}
+	if (offset % PGSIZE)
+	{
+		return NULL;
+	}
+	/* STDIN / STDOUT */
+	if (fd == 0 || fd == 1)
+	{
+		return NULL;
+	}
+	/* ------------------------ */
+
+	/* to avoid overlap */
+	if (spt_find_page(&thread_current()->spt, addr))
+	{
+		return NULL;
+	}
+
+	/* file open */
+	struct file *open_file = process_get_file(fd);
+	if (!open_file)
+	{
+		return NULL;
+	}
+	open_file = file_reopen(open_file);
+
+	return do_mmap(addr, file_length(open_file), writable, open_file, offset);
+}
+
+void munmap(void *addr)
+{
+	// SJ
+	if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
+	{
+		return;
+	}
+	do_munmap(addr);
 }

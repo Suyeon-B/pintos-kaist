@@ -53,11 +53,11 @@ struct page
 	struct frame *frame; /* Back reference for frame */
 
 	/* --- PROJECT 3 : VM ------------------------------------ */
-	uint8_t type;	/* VM_UNINIT, VM_FILE, VM_ANON의 타입 */
-	void *va;		/* page가 관리하는 가상페이지 번호 */
-	bool writable;	/* True일 경우 해당 주소에 write 가능
-						False일 경우 해당 주소에 write 불가능 */
-	bool is_loaded; /* 물리메모리의 탑재 여부를 알려주는 플래그 */
+	uint8_t type;  /* VM_UNINIT, VM_FILE, VM_ANON의 타입 */
+	void *va;	   /* page가 관리하는 가상페이지 번호 */
+	bool writable; /* True일 경우 해당 주소에 write 가능
+					   False일 경우 해당 주소에 write 불가능 */
+	// bool is_loaded; 	/* 물리메모리의 탑재 여부를 알려주는 플래그 */
 
 	struct list_elem mmap_elem; /* mmap 리스트 element */
 	size_t swap_slot;			/* 스왑 슬롯 */
@@ -141,5 +141,6 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
 void vm_dealloc_page(struct page *page);
 bool vm_claim_page(void *va);
 enum vm_type page_get_type(struct page *page);
+static bool vm_do_claim_page(struct page *page);
 
 #endif /* VM_VM_H */
