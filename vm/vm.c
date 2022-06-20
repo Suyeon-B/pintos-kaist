@@ -202,7 +202,6 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	if (!page)
 	{
-		// void *rsp = user ? f->rsp : thread_current()->user_rsp;
 		if (addr >= USER_STACK - (1 << 20) && USER_STACK > addr && addr >= f->rsp - 8 && addr < thread_current()->stack_bottom)
 		{
 			void *fpage = thread_current()->stack_bottom - PGSIZE;
