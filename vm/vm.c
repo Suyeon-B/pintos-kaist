@@ -13,6 +13,8 @@
 #include "include/userprog/process.h"
 
 // PJ3
+struct list frame_table;
+struct list_elem *start;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -26,6 +28,10 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	
+	// PJ3
+	list_init(&frame_table);
+	start = list_begin(&frame_table);
 }
 
 // PJ3
@@ -163,7 +169,30 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-
+	// PJ3
+	struct thread *current_thread = thread_current();
+	struct list_elem *search_elem = start;		// start는 vm_init에서 list_begin으로 초기화해줬다.
+	
+	for (start = search_elem; start != list_end(&frame_table); start = list_next(start)) {
+		victim = list_entry(start, struct frame, frame_elem);
+		
+		if (pml4_is_accessed(current_thread->pml4, victim->page->va)) {
+			pml4_set_accessed(current_thread->pml4, victim->page->va, 0);
+		} else {
+			return victim;
+		}
+	}
+	
+	for (start = list_begin(&frame_table); start != search_elem; start = list_next(start)) {
+		victim = list_entry(start, struct frame, frame_elem);
+		
+		if (pml4_is_accessed(current_thread->pml4, victim->page->va)) {
+			pml4_set_accessed(current_thread->pml4, victim->page->va, 0);
+		} else {
+			return victim;
+		}
+	}
+	
 	return victim;
 }
 
@@ -173,6 +202,8 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
+	// PJ3
+	swap_out(victim->page);
 
 	return NULL;
 }
@@ -188,6 +219,16 @@ vm_get_frame (void) {
 	// PJ3
 	frame = (struct frame *) malloc(sizeof (struct frame));
 	frame->kva = palloc_get_page(PAL_USER);
+	
+	if (frame->kva == NULL) {
+		frame = vm_evict_frame();
+		frame->page = NULL;
+		
+		return frame;
+	}
+	
+	// 생성된 프레임을 frame_table에 넣어준다.
+	list_push_back (&frame_table, &frame->frame_elem);
 	frame->page = NULL;
 
 	ASSERT (frame != NULL);

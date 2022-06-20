@@ -5,6 +5,8 @@
 
 // PJ3
 #include "lib/kernel/hash.h"
+#include "threads/vaddr.h"
+
 
 // PJ3
 struct list frame_table;
@@ -79,7 +81,6 @@ struct frame {
 	struct page *page;
 	
 	// PJ3
-	struct thread *thread;
 	struct list_elem frame_elem;
 };
 
