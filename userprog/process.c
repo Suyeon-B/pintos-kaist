@@ -337,7 +337,7 @@ void mmap_destroy(struct hash_elem *hash_elem, void *aux)
 {
 	struct page *page = hash_entry(hash_elem, struct page, hash_elem);
 
-	if (!page && page_get_type(page) == VM_FILE)
+	if (page && page_get_type(page) == VM_FILE)
 	{
 		// pml4_clear_page(&thread_current()->pml4, page->va);
 		munmap(page->va);
@@ -354,7 +354,7 @@ void process_exit(void)
  * TODO: project2/process_termination.html).
  * TODO: We recommend you to implement process resource cleanup here. */
 #ifdef VM
-	// hash_apply(&curr->spt.vm, mmap_destroy);
+	hash_apply(&curr->spt.vm, mmap_destroy);
 #endif
 	for (int i = 0; i < FD_LIMIT; i++)
 	{

@@ -409,9 +409,10 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 
 void munmap(void *addr)
 {
-	// if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
-	// {
-	// 	return;
-	// }
+	// SJ
+	if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
+	{
+		return;
+	}
 	do_munmap(addr);
 }

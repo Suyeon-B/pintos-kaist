@@ -118,6 +118,12 @@ void do_munmap(void *addr)
 
 	struct file *file = ((struct aux_for_lazy_load *)page->uninit.aux)->load_file;
 
+	// SJ
+	if (!file)
+	{
+		return;
+	}
+
 	while (page != NULL && page_get_type(page) == VM_FILE)
 	{
 		if (pml4_is_dirty(curr->pml4, page->va))
@@ -126,9 +132,13 @@ void do_munmap(void *addr)
 			file_write_at(aux->load_file, addr, aux->read_bytes, aux->offset);
 			pml4_set_dirty(curr->pml4, page->va, false);
 		}
-		spt_remove_page(&curr->spt, page);
-		// pml4_clear_page(&curr->pml4, addr);
+
+		// SJ
+		// spt_remove_page(&curr->spt, page);
+		pml4_clear_page(&curr->pml4, addr);
 		addr += PGSIZE;
 		page = spt_find_page(&curr->spt, addr);
 	}
+	// SJ
+	// file_close(file);
 }
