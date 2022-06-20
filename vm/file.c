@@ -4,6 +4,7 @@
 #include "include/userprog/process.h"
 #include "include/threads/mmu.h"
 #include "threads/malloc.h"
+#include "include/userprog/syscall.h"
 
 static bool file_backed_swap_in(struct page *page, void *kva);
 static bool file_backed_swap_out(struct page *page);
@@ -128,17 +129,15 @@ void do_munmap(void *addr)
 	{
 		if (pml4_is_dirty(curr->pml4, page->va))
 		{
+			lock_acquire(&file_lock);
 			struct aux_for_lazy_load *aux = page->uninit.aux;
 			file_write_at(aux->load_file, addr, aux->read_bytes, aux->offset);
 			pml4_set_dirty(curr->pml4, page->va, false);
+			lock_release(&file_lock);
 		}
 
-		// SJ
-		// spt_remove_page(&curr->spt, page);
 		pml4_clear_page(&curr->pml4, addr);
 		addr += PGSIZE;
 		page = spt_find_page(&curr->spt, addr);
 	}
-	// SJ
-	// file_close(file);
 }

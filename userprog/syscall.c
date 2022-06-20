@@ -182,10 +182,15 @@ int exec(const char *cmd_line)
 	char *fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return -1;
+	// lock_acquire(&file_lock);
 	memcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
+	// lock_release(&file_lock);
 
 	char *save_ptr;
+	// lock_acquire(&file_lock);
 	strtok_r(cmd_line, " ", &save_ptr);
+	// lock_release(&file_lock);
+
 	if (process_exec(fn_copy) == -1)
 	{
 		return -1; /* exec 실패 시에만 리턴 */
@@ -409,7 +414,6 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 
 void munmap(void *addr)
 {
-	// SJ
 	if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
 	{
 		return;
