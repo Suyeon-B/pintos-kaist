@@ -28,6 +28,7 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 {
 	/* Set up the handler */
 	page->operations = &file_ops;
+
 	struct file_page *file_page = &page->file;
 }
 
@@ -35,22 +36,54 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 static bool
 file_backed_swap_in(struct page *page, void *kva)
 {
-	struct file_page *file_page UNUSED = &page->file;
+	ASSERT(page != NULL);
+	struct aux_for_lazy_load *aux = page->uninit.aux;
+
+	file_seek(aux->load_file, aux->offset);
+
+	if (file_read(aux->load_file, kva, aux->read_bytes) != (off_t)aux->read_bytes)
+	{
+		return false;
+	}
+
+	memset(kva + aux->read_bytes, 0, aux->zero_bytes);
+
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out(struct page *page)
 {
-	struct file_page *file_page UNUSED = &page->file;
-}
+	ASSERT(page != NULL);
 
+	struct aux_for_lazy_load *aux = page->uninit.aux;
+	struct thread *curr_thread = page->t;
+
+	if (page->writable == true)
+	{
+		if (pml4_is_dirty(curr_thread->pml4, page->va))
+		{
+			if (file_write_at(aux->load_file, page->va, aux->read_bytes, aux->offset) != aux->read_bytes)
+			{
+				return false;
+			}
+			pml4_set_dirty(curr_thread->pml4, page->va, false);
+		}
+	}
+	pml4_clear_page(curr_thread->pml4, page->va);
+
+	return true;
+}
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy(struct page *page)
 {
-	struct file_page *file_page UNUSED = &page->file;
-	free(page->frame); /* frame 할당 해제 */
+	// struct uninit_page *uninit UNUSED = &page->uninit;
+	// struct lazy_load_info *aux = (struct lazy_load_info *)(uninit->aux);
+
+	// free(aux);
+	free(page->frame);
 }
 
 void *undo_mmap(void *initial_addr, void *addr)

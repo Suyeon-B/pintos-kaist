@@ -4,6 +4,8 @@
 #include <stdbool.h>
 void syscall_init(void);
 
+struct lock file_rw_lock; // prevent simultaneous read, write
+
 /* --- PROJECT 2 : system call ------------------------------ */
 struct lock file_lock; /* proventing race condition against  */
 void syscall_entry(void);

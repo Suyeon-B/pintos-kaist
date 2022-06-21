@@ -1,16 +1,9 @@
 {
   "files.associations": {
-    "thread.h": "c",
-    "stdbool.h": "c",
-    "syscall.h": "c",
-    "inspect.h": "c",
-    "vaddr.h": "c",
-    "intrinsic.h": "c",
+    "file.h": "c",
+    "bitmap.h": "c",
+    "anon.h": "c",
     "mmu.h": "c",
-    "process.h": "c",
-    "malloc.h": "c",
-    "*.inc": "c",
-    "vm.h": "c",
-    "stdint.h": "c"
+    "*.inc": "c"
   }
 }

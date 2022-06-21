@@ -57,6 +57,8 @@ struct page
 	void *va;	   /* page가 관리하는 가상페이지 번호 */
 	bool writable; /* True일 경우 해당 주소에 write 가능
 					   False일 경우 해당 주소에 write 불가능 */
+	struct thread *t;
+
 	// bool is_loaded; 	/* 물리메모리의 탑재 여부를 알려주는 플래그 */
 
 	struct list_elem mmap_elem; /* mmap 리스트 element */
@@ -90,6 +92,7 @@ struct frame
 {
 	void *kva; /* kernel virtual addr */
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
