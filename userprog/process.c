@@ -217,7 +217,9 @@ __do_fork(void *aux)
 			struct file *new_file;
 			if (file > 2)
 			{
+				lock_acquire(&file_lock);
 				new_file = file_duplicate(file);
+				lock_release(&file_lock);
 			}
 			else
 			{

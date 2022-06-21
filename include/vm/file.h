@@ -14,6 +14,7 @@ struct file_page
 	void *aux;
 	/* Initiate the struct page and maps the pa to the va */
 	bool (*page_initializer)(struct page *, enum vm_type, void *kva);
+	int swap_index;
 };
 
 void vm_file_init(void);
