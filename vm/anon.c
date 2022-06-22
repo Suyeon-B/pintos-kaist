@@ -35,8 +35,8 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 	/* page struct 안의 Union 영역은 현재 uninit page이다.
 	   ANON page를 초기화해주기 위해 해당 데이터를 모두 0으로 초기화해준다.
 	   Q. 이렇게 하면 Union 영역은 모두 다 0으로 초기화되나? -> 그릏다 */
-	struct uninit_page *uninit = &page->uninit;
-	memset(uninit, 0, sizeof(struct uninit_page));
+	// struct uninit_page *uninit = &page->uninit;
+	// memset(uninit, 0, sizeof(struct uninit_page));
 
 	/* Set up the handler */
 	/* 이제 해당 페이지는 ANON이므로 operations도 anon으로 지정한다. */
@@ -119,5 +119,5 @@ anon_destroy(struct page *page)
 	// struct aux_for_lazy_load *aux = (struct aux_for_lazy_load *)(uninit->aux);
 
 	// free(aux);
-	free(page->frame); /* frame 할당 해제 */
+	// free(page->frame); /* frame 할당 해제 */
 }

@@ -6,7 +6,6 @@ enum vm_type;
 
 struct anon_page
 {
-    // PJ3
     /* Initiate the contets of the page */
     vm_initializer *init;
     enum vm_type type;

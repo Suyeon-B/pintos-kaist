@@ -182,14 +182,10 @@ int exec(const char *cmd_line)
 	char *fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return -1;
-	// lock_acquire(&file_lock);
 	memcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
-	// lock_release(&file_lock);
 
 	char *save_ptr;
-	// lock_acquire(&file_lock);
 	strtok_r(cmd_line, " ", &save_ptr);
-	// lock_release(&file_lock);
 
 	if (process_exec(fn_copy) == -1)
 	{
@@ -268,18 +264,20 @@ int read(int fd, void *buffer, unsigned size)
 	/* STDIN */
 	if (fd == 0)
 	{
+		lock_acquire(&file_lock);
 		int i;
 		char *buf = buffer;
 		for (i = 0; i < size; i++)
 		{
-			lock_acquire(&file_lock);
+
 			char c = input_getc();
-			lock_release(&file_lock);
+
 			*buf++ = c;
 			if (c == '\0')
 				break;
 		}
 		read_result = i;
+		lock_release(&file_lock);
 	}
 	/* STDOUT */
 	else if (fd == 1)
@@ -311,9 +309,7 @@ int write(int fd, const void *buffer, unsigned size)
 	/* STDOUT */
 	if (fd == 1) /* to print buffer strings on the console */
 	{
-		lock_acquire(&file_lock);
 		putbuf(buffer, size);
-		lock_release(&file_lock);
 		write_result = size;
 	}
 	/* STDIN */
