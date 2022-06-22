@@ -343,13 +343,14 @@ int process_wait(tid_t child_tid UNUSED)
 }
 
 #ifdef VM
-	void mmap_destroy (struct hash_elem *page_elem, void *aux) {
-		struct page *page = hash_entry(page_elem, struct page, page_elem);
-		
-		if (page && page_get_type(page) == VM_FILE) {
-			munmap(page->va);
-		}
+// PJ3
+void mmap_destroy (struct hash_elem *page_elem, void *aux) {
+	struct page *page = hash_entry(page_elem, struct page, page_elem);
+	
+	if (page && page_get_type(page) == VM_FILE) {
+		munmap(page->va);
 	}
+}
 #endif
 
 /* Exit the process. This function is called by thread_exit (). */
