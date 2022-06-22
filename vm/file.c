@@ -84,7 +84,11 @@ file_backed_swap_out (struct page *page) {
 	// 그리고 이제 반영이 되었으니 더 이상 더럽혀져 있지 않다는 의미로 0을 넣어준다. 이제 다른 프로세스 등이 여기에 접근해서 write할 수 있을 것 같다.
 	// 추가로 애초에 write 등을 하면 하드웨어가 dirty bit을 1로 설정해둔다. 0으로 바꾸는 건 OS의 몫이다.
 	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
+		
+		lock_acquire(&file_lock);
 		file_write_at(aux->mapped_file, page->va, aux->page_read_bytes, aux->ofs);
+		lock_release(&file_lock);
+		
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 	
@@ -99,6 +103,7 @@ file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 	
 	// PJ3
+	// free(file_page->aux);
 	free(page->frame);
 }
 
@@ -169,11 +174,14 @@ void do_munmap(void *addr)
 	while (page != NULL && page_get_type(page) == VM_FILE) {
 		if (pml4_is_dirty(curr->pml4, page->va))
 		{
-			lock_acquire(&file_lock);
 			struct aux_for_lazy_load *aux = page->uninit.aux;
+			
+			lock_acquire(&file_lock);
 			file_write_at(aux->mapped_file, addr, aux->page_read_bytes, aux->ofs);
-			pml4_set_dirty(curr->pml4, page->va, false);
 			lock_release(&file_lock);
+			
+			pml4_set_dirty(curr->pml4, page->va, false);
+			
 		}
 
 		pml4_clear_page(&curr->pml4, addr);

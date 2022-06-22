@@ -205,7 +205,8 @@ vm_evict_frame (void) {
 	// PJ3
 	swap_out(victim->page);
 
-	return NULL;
+	// return NULL;
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
