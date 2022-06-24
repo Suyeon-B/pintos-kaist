@@ -49,9 +49,6 @@ void syscall_init(void)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
-#ifdef VM
-	thread_current()->user_rsp = f->rsp;
-#endif
 	switch (f->R.rax) /* rax : system call number */
 	{
 	/* Projects 2 and later.
@@ -133,6 +130,20 @@ check_address(void *addr)
 #endif
 }
 
+void check_valid_buffer(void *buffer, unsigned size, bool is_read)
+{
+	// PJ3
+	for (char i = 0; i < size; i++)
+	{
+		struct page *page = check_address(buffer + i);
+
+		if (is_read && !page->writable)
+		{
+			exit(-1);
+		}
+	}
+}
+
 /* PintOS를 종료시킨다. */
 void halt(void)
 {
@@ -186,7 +197,6 @@ int exec(const char *cmd_line)
 
 	char *save_ptr;
 	strtok_r(cmd_line, " ", &save_ptr);
-
 	if (process_exec(fn_copy) == -1)
 	{
 		exit(-1);
@@ -203,6 +213,7 @@ int exec(const char *cmd_line)
 tid_t fork(const char *thread_name, struct intr_frame *f)
 {
 	/* 부모 스레드는 자식 스레드가 복제 완료될 때 까지 리턴하면 x */
+	// printf("\n ### fork ### \n"); // 지워
 	check_address(thread_name);
 	return process_fork(thread_name, f);
 }
@@ -217,16 +228,19 @@ int open(const char *file)
 	{
 		return -1;
 	}
+
 	lock_acquire(&file_lock);
 	struct file *open_file = filesys_open(file);
 	lock_release(&file_lock);
+
 	if (open_file == NULL)
 	{
-
 		return -1;
 	}
-	int fd = add_file_to_fdt(open_file); /* 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게 */
-	if (fd == -1)						 /* FDT가 다 찬 경우 */
+
+	int fd = add_file_to_fdt(open_file); // 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게
+
+	if (fd == -1) /* FDT가 다 찬 경우 */
 	{
 		lock_acquire(&file_lock);
 		file_close(open_file);
@@ -243,10 +257,12 @@ int filesize(int fd)
 	{
 		return -1;
 	}
+
 	lock_acquire(&file_lock);
-	int size = file_length(open_file);
+	int result = file_length(open_file);
 	lock_release(&file_lock);
-	return size;
+
+	return result;
 }
 
 int read(int fd, void *buffer, unsigned size)
@@ -257,27 +273,24 @@ int read(int fd, void *buffer, unsigned size)
 	struct file *file_obj = process_get_file(fd);
 	if (file_obj == NULL)
 	{ /* if no file in fdt, return -1 */
-
 		return -1;
 	}
 
 	/* STDIN */
 	if (fd == 0)
 	{
-		lock_acquire(&file_lock);
 		int i;
 		char *buf = buffer;
 		for (i = 0; i < size; i++)
 		{
-
+			lock_acquire(&file_lock);
 			char c = input_getc();
-
+			lock_release(&file_lock);
 			*buf++ = c;
 			if (c == '\0')
 				break;
 		}
 		read_result = i;
-		lock_release(&file_lock);
 	}
 	/* STDOUT */
 	else if (fd == 1)
@@ -309,7 +322,9 @@ int write(int fd, const void *buffer, unsigned size)
 	/* STDOUT */
 	if (fd == 1) /* to print buffer strings on the console */
 	{
+		lock_acquire(&file_lock);
 		putbuf(buffer, size);
+		lock_release(&file_lock);
 		write_result = size;
 	}
 	/* STDIN */
@@ -371,64 +386,62 @@ void close(int fd)
 	lock_release(&file_lock);
 }
 
-void check_valid_buffer(void *buffer, unsigned size, bool is_read)
-{
-	/* 버퍼 내의 시작부터 끝까지의 각 주소를 모두 check_address*/
-	for (char i = 0; i < size; i++) /* char OR int */
-	{
-		struct page *page = check_address(buffer + i);
-
-		/* 해당 주소가 포함된 페이지가 spt에 없거나,
-		 * not writable page인 경우 */
-		if (is_read && !page->writable)
-		{
-			exit(-1);
-		}
-	}
-}
-
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 {
-	/* ---- validity check ---- */
-	if (!addr || is_kernel_vaddr(addr) || (uint64_t)addr % PGSIZE || (long)length <= 0) /* 형변환!!! */
+	if (!addr || is_kernel_vaddr(addr) || pg_round_down(addr) != addr || (long long)length <= 0)
 	{
 		return NULL;
 	}
+
 	if (offset % PGSIZE)
 	{
 		return NULL;
 	}
-	/* STDIN / STDOUT */
+
 	if (fd == 0 || fd == 1)
 	{
 		return NULL;
 	}
-	/* ------------------------ */
 
-	/* to avoid overlap */
+	if (addr == NULL)
+	{
+		return NULL;
+	}
+
 	if (spt_find_page(&thread_current()->spt, addr))
 	{
 		return NULL;
 	}
 
-	/* file open */
-	struct file *open_file = process_get_file(fd);
-	if (!open_file)
+	struct file *file = process_get_file(fd);
+
+	if (file == NULL)
 	{
 		return NULL;
 	}
+
 	lock_acquire(&file_lock);
-	open_file = file_reopen(open_file);
+	file = file_reopen(file);
 	lock_release(&file_lock);
 
-	return do_mmap(addr, file_length(open_file), writable, open_file, offset);
+	if (file == NULL)
+	{
+		return NULL;
+	}
+
+	lock_acquire(&file_lock);
+	size_t length_result = file_length(file);
+	lock_release(&file_lock);
+
+	return do_mmap(addr, length_result, writable, file, offset);
 }
 
 void munmap(void *addr)
 {
-	if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
+	if (is_kernel_vaddr(addr) || (uint64_t)addr % PGSIZE || !addr)
 	{
 		return;
 	}
+
 	do_munmap(addr);
 }
