@@ -2,6 +2,5 @@
   "files.associations": {
     "thread.h": "c",
     "stdbool.h": "c",
-    "inttypes.h": "c"
   }
 }

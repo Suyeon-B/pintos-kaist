@@ -14,6 +14,7 @@
 #include "userprog/process.h"
 #include "kernel/stdio.h"
 #include "threads/palloc.h"
+#include "include/vm/vm.h"
 
 /* System call.
  *
@@ -48,6 +49,9 @@ void syscall_init(void)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
+#ifdef VM
+	thread_current()->user_rsp = f->rsp;
+#endif
 	switch (f->R.rax) /* rax : system call number */
 	{
 	/* Projects 2 and later.
@@ -95,6 +99,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE: /* Close a file. */
 		close(f->R.rdi);
 		break;
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
 	default:
 		exit(-1);
 		break;
@@ -103,13 +113,24 @@ void syscall_handler(struct intr_frame *f UNUSED)
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 하는 함수
    유저 영역을 벗어난 영역일 경우 프로세스 종료(exit(-1)) */
-void check_address(const uint64_t *addr)
+struct page *
+check_address(void *addr)
 {
-	if (addr = NULL || !(is_user_vaddr(addr)) ||
-			   pml4_get_page(thread_current()->pml4, addr) == NULL)
+#ifdef VM
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+
+	if (!addr || !(is_user_vaddr(addr)) || !page)
 	{
 		exit(-1);
 	}
+
+	return page;
+#else
+	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
+	{
+		exit(-1);
+	}
+#endif
 }
 
 /* PintOS를 종료시킨다. */
@@ -161,10 +182,15 @@ int exec(const char *cmd_line)
 	char *fn_copy = palloc_get_page(0);
 	if (fn_copy == NULL)
 		return -1;
+	// lock_acquire(&file_lock);
 	memcpy(fn_copy, cmd_line, strlen(cmd_line) + 1);
+	// lock_release(&file_lock);
 
 	char *save_ptr;
+	// lock_acquire(&file_lock);
 	strtok_r(cmd_line, " ", &save_ptr);
+	// lock_release(&file_lock);
+
 	if (process_exec(fn_copy) == -1)
 	{
 		return -1; /* exec 실패 시에만 리턴 */
@@ -203,7 +229,7 @@ int open(const char *file)
 		lock_release(&file_lock);
 		return -1;
 	}
-	int fd = add_file_to_fdt(open_file); // 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게
+	int fd = add_file_to_fdt(open_file); /* 오픈한 파일을 스레드 내 fdt테이블에 추가 - 스레드가 파일을 관리할수있게 */
 	if (fd == -1)						 /* FDT가 다 찬 경우 */
 	{
 		file_close(open_file);
@@ -224,7 +250,7 @@ int filesize(int fd)
 
 int read(int fd, void *buffer, unsigned size)
 {
-	check_address(buffer);
+	check_valid_buffer(buffer, size, true);
 	lock_acquire(&file_lock);
 
 	int read_result;
@@ -265,7 +291,7 @@ int read(int fd, void *buffer, unsigned size)
 
 int write(int fd, const void *buffer, unsigned size)
 {
-	check_address(buffer);
+	check_valid_buffer(buffer, size, false);
 	lock_acquire(&file_lock);
 
 	int write_result;
@@ -333,4 +359,64 @@ void close(int fd)
 		return;
 	}
 	process_close_file(fd);
+}
+
+void check_valid_buffer(void *buffer, unsigned size, bool is_read)
+{
+	/* 버퍼 내의 시작부터 끝까지의 각 주소를 모두 check_address*/
+	for (char i = 0; i < size; i++) /* char OR int */
+	{
+		struct page *page = check_address(buffer + i);
+
+		/* 해당 주소가 포함된 페이지가 spt에 없거나,
+		 * not writable page인 경우 */
+		if (is_read && !page->writable)
+		{
+			exit(-1);
+		}
+	}
+}
+
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+	/* ---- validity check ---- */
+	if (!addr || is_kernel_vaddr(addr) || (uint64_t)addr % PGSIZE || (long)length <= 0) /* 형변환!!! */
+	{
+		return NULL;
+	}
+	if (offset % PGSIZE)
+	{
+		return NULL;
+	}
+	/* STDIN / STDOUT */
+	if (fd == 0 || fd == 1)
+	{
+		return NULL;
+	}
+	/* ------------------------ */
+
+	/* to avoid overlap */
+	if (spt_find_page(&thread_current()->spt, addr))
+	{
+		return NULL;
+	}
+
+	/* file open */
+	struct file *open_file = process_get_file(fd);
+	if (!open_file)
+	{
+		return NULL;
+	}
+	open_file = file_reopen(open_file);
+
+	return do_mmap(addr, file_length(open_file), writable, open_file, offset);
+}
+
+void munmap(void *addr)
+{
+	if ((uint64_t)addr % PGSIZE || !addr || is_kernel_vaddr(addr))
+	{
+		return;
+	}
+	do_munmap(addr);
 }

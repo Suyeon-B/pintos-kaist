@@ -12,6 +12,7 @@ void process_activate(struct thread *next);
 void argument_stack(int argc, char **argv, struct intr_frame *if_);
 
 // file descriptor
+static bool install_page(void *upage, void *kpage, bool writable);
 int add_file_to_fdt(struct file *file);
 struct file *process_get_file(int fd);
 void remove_file_from_fdt(int fd);
@@ -21,5 +22,7 @@ static bool load(const char *file_name, struct intr_frame *if_);
 static void initd(void *f_name);
 static void __do_fork(void *);
 static void process_init(void);
+// VM
+bool lazy_load_segment(struct page *page, void *aux);
 
 #endif /* userprog/process.h */
