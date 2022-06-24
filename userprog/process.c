@@ -217,7 +217,9 @@ __do_fork(void *aux)
 			struct file *new_file;
 			if (file > 2)
 			{
+				lock_acquire(&file_lock);
 				new_file = file_duplicate(file);
+				lock_release(&file_lock);
 			}
 			else
 			{
@@ -251,7 +253,6 @@ int process_exec(void *f_name) /* 프로세스 실행 - 실행하려는 바이�
 	bool success;
 
 	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
-
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -339,7 +340,6 @@ void mmap_destroy(struct hash_elem *hash_elem, void *aux)
 
 	if (page && page_get_type(page) == VM_FILE)
 	{
-		// pml4_clear_page(&thread_current()->pml4, page->va);
 		munmap(page->va);
 	}
 }
